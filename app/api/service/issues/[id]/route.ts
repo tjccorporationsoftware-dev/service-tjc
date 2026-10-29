@@ -1,5 +1,5 @@
 import { query, queryOne, execute } from '@/lib/db'
-import { requireServiceKey } from '@/lib/service-api'
+import { LEGACY_WARRANTY_FIELDS, requireServiceKey } from '@/lib/service-api'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { serviceIssuePatchSchema, firstIssueMessage } from '@/lib/validations'
 
@@ -76,7 +76,7 @@ export async function GET(request: Request, ctx: RouteContext<'/api/service/issu
 
   // ส่ง id ของไฟล์ไปด้วย ให้ผู้เรียกดาวน์โหลดผ่าน /api/service/issues/<id>/files/<file_id>
   // ซึ่งตรวจ key เหมือนกัน — ไม่ต้องพึ่ง /api/files/* ที่เปิดให้ใครก็โหลดได้
-  return Response.json({ issue, attachments })
+  return Response.json({ issue: { ...issue, ...LEGACY_WARRANTY_FIELDS }, attachments })
 }
 
 export async function PATCH(request: Request, ctx: RouteContext<'/api/service/issues/[id]'>) {

@@ -13,6 +13,20 @@ import { timingSafeEqual } from 'node:crypto'
 /** ความยาวขั้นต่ำของ key — สั้นกว่านี้เดาได้ง่ายเกินไป */
 const MIN_KEY_LENGTH = 32
 
+/**
+ * ฟิลด์ประกันที่ต้องตอบไว้ในเคสของ /api/service/issues* ทั้งที่เลิกใช้ระบบประกันแล้ว — ค่าคงที่ ไม่ได้อ่านจาก DB
+ *
+ * ระบบแจ้งซ่อม tjc-api (PHP) ยังอ่าน 3 ฟิลด์นี้อยู่ (warranty_inbox.php, service_dashboard.php, ServiceRequest.php)
+ * และแก้ฝั่งนั้นไม่ได้เพราะ ASCENT ซึ่งยังใช้ระบบประกันใช้ repo ร่วมกัน — ถ้าฟิลด์หายไป PHP ขึ้น Warning
+ * ค่าชุดนี้ทำให้ `!empty($issue['warranty_end'])` เป็น false ป้ายประกันฝั่งนั้นจึงซ่อนเอง
+ * ห้ามถอดออกจนกว่า tjc-api จะเลิกอ่านฟิลด์เหล่านี้
+ */
+export const LEGACY_WARRANTY_FIELDS = {
+  in_warranty: 0,
+  warranty_start: null,
+  warranty_end: null,
+} as const
+
 export type ServiceAuthResult = { ok: true } | { ok: false; response: Response }
 
 function unauthorized(): Response {

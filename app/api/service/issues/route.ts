@@ -1,5 +1,5 @@
 import { query } from '@/lib/db'
-import { requireServiceKey } from '@/lib/service-api'
+import { LEGACY_WARRANTY_FIELDS, requireServiceKey } from '@/lib/service-api'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 /**
@@ -55,5 +55,5 @@ export async function GET(request: Request) {
      LIMIT ${limit}`
   )
 
-  return Response.json({ issues: rows })
+  return Response.json({ issues: rows.map((row) => ({ ...row, ...LEGACY_WARRANTY_FIELDS })) })
 }

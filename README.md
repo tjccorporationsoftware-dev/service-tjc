@@ -115,6 +115,9 @@ uploads/                 # ไฟล์แนบ (ไม่ commit)
 คอลัมน์ `warranty_*` / `customer_reported_warranty_*` / `in_warranty` ยังอยู่ในฐานข้อมูลแต่ไม่มีโค้ดใช้แล้ว
 (เหตุผลอยู่หัวไฟล์ `db/schema.sql`)
 
+ข้อยกเว้น: `/api/service/issues` และ `/api/service/issues/:id` ยังตอบ `in_warranty: 0, warranty_start: null, warranty_end: null`
+เป็นค่าคงที่ (ไม่อ่านจาก DB) เพราะระบบแจ้งซ่อม tjc-api ยังอ่านฟิลด์เหล่านี้อยู่ — ดู `LEGACY_WARRANTY_FIELDS` ใน `lib/service-api.ts`
+
 **ลูกค้ากรอกเองทั้งหมด เจ้าหน้าที่ไม่ต้องเตรียมอะไรไว้ก่อน** (`POST /api/register`)
 ลูกค้ากรอกข้อมูลติดต่อ, SN และชื่อสินค้า/ยี่ห้อ/รุ่นเอง แจ้งปัญหาได้เลยหลังลงทะเบียน ระบบจับคู่กับข้อมูลเดิมให้ดังนี้
 
