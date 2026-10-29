@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Play, QrCode, Sparkles, Link2 } from 'lucide-react'
+import { Download, QrCode, Sparkles, Link2 } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
   Card,
   CardHeader,
-  DateInput,
   Field,
   Input,
   Pagination,
@@ -17,12 +16,12 @@ import {
   TableLoading,
   Td,
   Th,
-  formatDate,
   formatDateTime,
 } from '@/components/admin/ui'
-import { SN_DISPLAY_STATUS_LABEL, snDisplayStatus } from '@/lib/warranty'
+import { SN_DISPLAY_STATUS_LABEL, snDisplayStatus } from '@/lib/display'
 import { useApiList } from '@/lib/use-api-list'
 import { snPatternHint } from '@/lib/sn-format'
+import { SITE } from '@/lib/site-content'
 
 type Product = { id: number; name: string }
 
@@ -45,10 +44,6 @@ type Serial = {
   phone: string | null
   customer_name: string | null
   registered_at: string | null
-  warranty_start: string | null
-  warranty_end: string | null
-  days_left: number | null
-  warranty_status: 'not_started' | 'active' | 'expired' | null
 }
 
 type ListResponse = {
@@ -72,10 +67,6 @@ export default function SerialNumbersPage() {
   const [page, setPage] = useState(1)
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [showStartModal, setShowStartModal] = useState(false)
-  const [modalDate, setModalDate] = useState('')
-  const [starting, setStarting] = useState(false)
-  const [startMessage, setStartMessage] = useState('')
 
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assignProductId, setAssignProductId] = useState('')
@@ -112,10 +103,9 @@ export default function SerialNumbersPage() {
   const serials = data?.serials ?? []
   const meta = data?.meta ?? EMPTY_META
 
-  // เลือกได้ทั้ง SN ที่ยังไม่ผูกผลิตภัณฑ์ (รอผูก) และที่ผูกแล้วแต่ยังไม่เริ่มประกัน (รอเริ่ม)
-  // ยกเว้นตัวที่เริ่มไปแล้ว หมดประกันแล้ว หรือถูกยกเลิก
+  // งานเดียวที่ทำกับหลายแถวได้คือผูกผลิตภัณฑ์ — เลือกได้เฉพาะ SN ที่ยังไม่ผูกและไม่ถูกยกเลิก
   function isSelectable(s: Serial) {
-    return s.sn_status !== 'void' && s.warranty_status !== 'active' && s.warranty_status !== 'expired'
+    return s.sn_status !== 'void' && s.product_name === null
   }
 
   const selectableIds = serials.filter(isSelectable).map((s) => s.id)
@@ -165,46 +155,6 @@ export default function SerialNumbersPage() {
       setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')
     } finally {
       setGenerating(false)
-    }
-  }
-
-  function openStartModal() {
-    setModalDate('')
-    setShowStartModal(true)
-  }
-
-  async function confirmStartWarranty() {
-    if (selected.size === 0) return
-    setError('')
-    setStartMessage('')
-    setStarting(true)
-    try {
-      const res = await fetch('/api/admin/registrations/start-warranty', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // ไม่เลือกวันที่ (modalDate ว่าง) = เริ่มทันที ณ วันที่กดยืนยัน
-        body: JSON.stringify({
-          serial_number_ids: [...selected],
-          start_date: modalDate || undefined,
-        }),
-      })
-      const body = await res.json()
-      if (!res.ok) {
-        setError(body.error ?? 'เริ่มประกันไม่สำเร็จ')
-        return
-      }
-      setStartMessage(
-        body.skipped > 0
-          ? `เริ่มประกันสำเร็จ ${body.started} รายการ (ข้าม ${body.skipped} รายการที่เริ่มไปแล้วหรือยังไม่ผูกผลิตภัณฑ์)`
-          : `เริ่มประกันสำเร็จ ${body.started} รายการ`
-      )
-      setSelected(new Set())
-      setShowStartModal(false)
-      reload()
-    } catch {
-      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')
-    } finally {
-      setStarting(false)
     }
   }
 
@@ -265,7 +215,6 @@ export default function SerialNumbersPage() {
       </div>
 
       {(error || listError) && <Alert tone="error">{error || listError}</Alert>}
-      {startMessage && <Alert tone="success">{startMessage}</Alert>}
       {assignMessage && <Alert tone="success">{assignMessage}</Alert>}
 
       <Card>
@@ -305,7 +254,7 @@ export default function SerialNumbersPage() {
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <Field label="หมวดหมู่" required hint="เช่น เครื่องมือวินิจฉัย, อุปกรณ์ช่วยชีวิต">
+            <Field label="หมวดหมู่" required hint={`เช่น ${SITE.examples.snCategory}`}>
               <Input
                 list="sn-category-options"
                 value={genForm.category}
@@ -347,8 +296,8 @@ export default function SerialNumbersPage() {
 
       <Card>
         <CardHeader
-          title="ค้นหา / ผูกผลิตภัณฑ์ / เริ่มระยะเวลาประกัน"
-          description="เลือกได้หลายแถว ทั้งที่ยังไม่ผูกผลิตภัณฑ์และที่ผูกแล้วรอเริ่มประกัน"
+          title="ค้นหา / ผูกผลิตภัณฑ์"
+          description="เลือกได้หลายแถวเฉพาะ SN ที่ยังไม่ผูกผลิตภัณฑ์ แล้วกดผูกกับผลิตภัณฑ์ได้ทีเดียว"
           action={
             <a href={exportUrl()}>
               <Button variant="secondary">
@@ -378,7 +327,7 @@ export default function SerialNumbersPage() {
           >
             <option value="">ทุกสถานะ</option>
             <option value="available">ยังไม่ลงทะเบียน</option>
-            <option value="started">เริ่มประกันแล้ว (ยังไม่มีลูกค้า)</option>
+            <option value="started">รอลูกค้ากรอกข้อมูล</option>
             <option value="registered">ลงทะเบียนแล้ว</option>
             <option value="void">ยกเลิก</option>
           </Select>
@@ -417,23 +366,19 @@ export default function SerialNumbersPage() {
           <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4">
             <span className="text-sm font-medium text-navy-700">เลือกแล้ว {selected.size} รายการ</span>
             <div className="ml-auto flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => setSelected(new Set())} disabled={starting || assigning}>
+              <Button variant="secondary" onClick={() => setSelected(new Set())} disabled={assigning}>
                 ยกเลิก
               </Button>
-              <Button variant="secondary" onClick={openAssignModal} disabled={starting || assigning}>
+              <Button onClick={openAssignModal} disabled={assigning}>
                 <Link2 className="h-4 w-4" />
-                ผูกกับผลิตภัณฑ์
-              </Button>
-              <Button onClick={openStartModal} disabled={starting || assigning}>
-                <Play className="h-4 w-4" />
-                {`เริ่มประกัน (${selected.size})`}
+                {`ผูกกับผลิตภัณฑ์ (${selected.size})`}
               </Button>
             </div>
           </div>
         )}
 
         <div className="scrollbar-thin -mx-6 overflow-x-auto px-6">
-          <table className="w-full min-w-[1180px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-navy-100">
                 <Th>
@@ -452,15 +397,12 @@ export default function SerialNumbersPage() {
                 <Th>สถานะ</Th>
                 <Th>ลูกค้า</Th>
                 <Th>วันลงทะเบียน</Th>
-                <Th>วันเริ่ม</Th>
-                <Th>วันที่สิ้นสุด</Th>
-                <Th>เหลือ</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-50">
-              {loading && <TableLoading colSpan={10} />}
+              {loading && <TableLoading colSpan={7} />}
               {!loading && serials.length === 0 && (
-                <TableEmpty colSpan={10}>
+                <TableEmpty colSpan={7}>
                   <QrCode className="mx-auto mb-2 h-8 w-8 text-navy-200" strokeWidth={1.5} />
                   ไม่พบข้อมูล
                 </TableEmpty>
@@ -507,33 +449,6 @@ export default function SerialNumbersPage() {
                       </Td>
                       <Td className="text-navy-500 whitespace-nowrap">
                         {serial.registered_at ? formatDateTime(serial.registered_at) : '—'}
-                      </Td>
-                      <Td className="text-navy-500 whitespace-nowrap">
-                        {serial.warranty_start ? (
-                          formatDate(serial.warranty_start)
-                        ) : (
-                          <span className="text-navy-300">—</span>
-                        )}
-                      </Td>
-                      <Td className="text-navy-500 whitespace-nowrap">
-                        {serial.warranty_end ? (
-                          formatDate(serial.warranty_end)
-                        ) : (
-                          <span className="text-navy-300">—</span>
-                        )}
-                      </Td>
-                      <Td className="whitespace-nowrap">
-                        {serial.warranty_status === 'active' ? (
-                          <span className="text-xs font-medium text-emerald-600">
-                            เหลือ {serial.days_left} วัน
-                          </span>
-                        ) : serial.warranty_status === 'expired' ? (
-                          <span className="text-xs font-medium text-rose-600">หมดประกันแล้ว</span>
-                        ) : serial.warranty_status === 'not_started' ? (
-                          <span className="text-xs font-medium text-amber-600">ยังไม่เริ่ม</span>
-                        ) : (
-                          <span className="text-navy-300">—</span>
-                        )}
                       </Td>
                     </tr>
                   )
@@ -583,48 +498,6 @@ export default function SerialNumbersPage() {
               <Button onClick={confirmAssignProduct} disabled={assigning || !assignProductId}>
                 <Link2 className="h-4 w-4" />
                 {assigning ? 'กำลังผูก…' : 'ผูกผลิตภัณฑ์'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showStartModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-4"
-          onClick={() => !starting && setShowStartModal(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-soft-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-navy-900">เริ่มประกัน {selected.size} รายการ</h3>
-            <p className="mt-1 text-sm text-navy-500">
-              เลือกวันที่เริ่มประกัน หรือปล่อยว่างไว้เพื่อเริ่มทันที ณ ตอนที่กดยืนยัน (ใช้ได้เฉพาะ SN ที่ผูกผลิตภัณฑ์แล้ว)
-            </p>
-
-            <div className="mt-4">
-              <Field label="วันที่เริ่มประกัน" hint="ไม่ระบุ = เริ่มวันนี้">
-                <DateInput
-                  value={modalDate}
-                  onChange={setModalDate}
-                  aria-label="วันที่เริ่มประกัน"
-                  disabled={starting}
-                />
-              </Field>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setShowStartModal(false)}
-                disabled={starting}
-              >
-                ยกเลิก
-              </Button>
-              <Button onClick={confirmStartWarranty} disabled={starting}>
-                <Play className="h-4 w-4" />
-                {starting ? 'กำลังเริ่ม…' : modalDate ? 'เริ่มประกันตามวันที่เลือก' : 'เริ่มประกันทันที'}
               </Button>
             </div>
           </div>

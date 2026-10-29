@@ -1,7 +1,6 @@
 import { query, queryOne, type SqlParams } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 import { parsePagination, meta } from '@/lib/pagination'
-import { daysLeft, formatDuration, toDuration, warrantyState } from '@/lib/warranty'
 
 type Row = {
   id: number
@@ -10,16 +9,11 @@ type Row = {
   category: string | null
   product_name: string | null
   model: string | null
-  warranty_years: number | null
-  warranty_months: number | null
-  warranty_days: number | null
   created_at: string
   registration_id: number | null
   phone: string | null
   customer_name: string | null
   registered_at: string | null
-  warranty_start: string | null
-  warranty_end: string | null
 }
 
 export async function GET(request: Request) {
@@ -80,9 +74,7 @@ export async function GET(request: Request) {
   const rows = await query<Row>(
     `SELECT s.id, s.sn, s.status AS sn_status, s.category, s.created_at,
             p.name AS product_name, p.model,
-            p.warranty_years, p.warranty_months, p.warranty_days,
-            r.id AS registration_id, r.phone, r.customer_name, r.registered_at,
-            r.warranty_start, r.warranty_end
+            r.id AS registration_id, r.phone, r.customer_name, r.registered_at
      FROM serial_numbers s
      LEFT JOIN products p ON p.id = s.product_id
      LEFT JOIN registrations r ON r.serial_number_id = s.id
@@ -97,14 +89,7 @@ export async function GET(request: Request) {
   )
 
   return Response.json({
-    serials: rows.map((row) => ({
-      ...row,
-      // ยังไม่ผูกผลิตภัณฑ์ = ไม่รู้ระยะประกัน
-      warranty_text: row.product_name ? formatDuration(toDuration(row)) : null,
-      days_left: row.warranty_end ? daysLeft(row.warranty_end) : null,
-      // ไม่มี registration_id เลย = ยังไม่ลงทะเบียน (ต่างจาก "ลงทะเบียนแล้วแต่ยังไม่เริ่มประกัน")
-      warranty_status: row.registration_id ? warrantyState(row.warranty_end) : null,
-    })),
+    serials: rows,
     categories: categories.map((c) => c.category),
     meta: meta(total?.count ?? 0, page),
   })

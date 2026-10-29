@@ -1,6 +1,12 @@
 import type { ComponentProps, ReactNode } from 'react'
+import { Check } from 'lucide-react'
+import { CrossPattern, EcgLine, EcoSun, EcoWaves, TechBackdrop } from '@/components/decor'
 import { ThaiDatePicker, type ThaiDatePickerProps } from '@/components/thai-date-picker'
+import type { SiteDesign } from '@/lib/design'
+import { SITE } from '@/lib/site-content'
 import Link from 'next/link'
+
+type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -179,33 +185,158 @@ export const ISSUE_STATUS_TONE: Record<string, keyof typeof badgeTones> = {
   closed: 'slate',
 }
 
-const iconCircleTones = {
-  brand: 'bg-brand-50 text-brand-600',
-  green: 'bg-emerald-50 text-emerald-600',
-  amber: 'bg-amber-50 text-amber-600',
-  rose: 'bg-rose-50 text-rose-600',
-} as const
+/**
+ * หน้าตาส่วนหัวของหน้าฟอร์มแยกตาม design ของบริษัท (lib/design.ts) — พื้น ไอคอน และสีตัวหนังสือ
+ * tech พื้นกรมท่าเข้ม · eco ฟ้าสว่างมีแสงอาทิตย์และคลื่นน้ำ · clinical ขาวมีลายกากบาทและเส้นคลื่นหัวใจ
+ */
+const PAGE_HERO = {
+  tech: {
+    section: 'bg-navy-900',
+    decor: <TechBackdrop />,
+    icon: 'rounded-2xl bg-white/10 text-brand-200 ring-1 ring-white/15 backdrop-blur',
+    success: 'rounded-2xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30 backdrop-blur',
+    title: 'text-white',
+    text: 'text-navy-200',
+    fade: false,
+  },
+  eco: {
+    section: 'bg-linear-to-b from-brand-50 via-brand-50/60 to-white',
+    decor: (
+      <>
+        <EcoSun className="absolute -top-72 -right-48 -z-10 h-[40rem] w-[40rem]" />
+        <EcoWaves className="absolute inset-x-0 bottom-0 -z-10 h-24" />
+      </>
+    ),
+    icon: 'rounded-full bg-linear-to-br from-brand-400 to-brand-600 text-white shadow-soft-lg',
+    success: 'rounded-full bg-emerald-500 text-white shadow-soft-lg',
+    title: 'text-navy-900',
+    text: 'text-navy-500',
+    fade: true,
+  },
+  clinical: {
+    section: 'bg-white',
+    decor: (
+      <>
+        <CrossPattern className="absolute inset-0 -z-10" />
+        {/* กลางกล่องขาวโล่งให้หัวข้ออ่านง่าย ลายกากบาทเหลือแค่รอบ ๆ */}
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_38%_55%_at_50%_45%,#fff_45%,transparent)]" />
+        {/* ต่ำกว่าคำอธิบาย (pb-28) — ช่วงกลางถูกการ์ดของ PageBody ทับ เห็นเส้นวิ่งที่สองข้าง */}
+        <EcgLine className="absolute inset-x-0 bottom-3 -z-10 h-16 w-full opacity-60" />
+      </>
+    ),
+    icon: 'rounded-lg bg-brand-600 text-white shadow-soft',
+    success: 'rounded-lg bg-emerald-600 text-white shadow-soft',
+    title: 'text-navy-900',
+    text: 'text-navy-500',
+    fade: true,
+  },
+} satisfies Record<
+  SiteDesign,
+  Record<'section' | 'icon' | 'success' | 'title' | 'text', string> & { decor: ReactNode; fade: boolean }
+>
 
-/** วงกลมไอคอน — ใช้กับหัวการ์ดฟีเจอร์หน้าแรก, หน้าสำเร็จ, หัวข้อฟอร์ม */
-export function IconCircle({
+/**
+ * ส่วนหัวของหน้าฟอร์มฝั่งลูกค้า — ไอคอน + หัวข้อ + คำอธิบาย หน้าตาตาม design ของบริษัท
+ * (เมนูสลับหน้าอยู่ที่แถบบนของ layout ที่เดียว ไม่ซ้ำในนี้)
+ * เนื้อหาหน้าให้ห่อด้วย PageBody เพื่อดึงขึ้นมาทับขอบล่างของส่วนหัว
+ */
+export function PageHero({
   icon: Icon,
+  title,
+  description,
   tone = 'brand',
-  size = 'md',
-  className = '',
 }: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
-  tone?: keyof typeof iconCircleTones
-  size?: 'md' | 'lg'
-  className?: string
+  icon: IconComponent
+  title: string
+  description: string
+  tone?: 'brand' | 'success'
 }) {
-  const sizes = { md: 'h-11 w-11', lg: 'h-14 w-14' }
-  const iconSizes = { md: 'h-5 w-5', lg: 'h-6 w-6' }
+  const look = PAGE_HERO[SITE.design]
   return (
-    <div
-      className={`flex shrink-0 items-center justify-center rounded-2xl ${sizes[size]} ${iconCircleTones[tone]} ${className}`}
-    >
-      <Icon className={iconSizes[size]} strokeWidth={2} />
+    <div className="relative">
+      <section className={`relative isolate overflow-hidden ${look.section}`}>
+        {look.decor}
+        <div className="mx-auto max-w-5xl px-4 pt-12 pb-28 text-center sm:pt-14">
+          <span
+            className={`mx-auto flex h-16 w-16 items-center justify-center ${tone === 'success' ? look.success : look.icon}`}
+          >
+            <Icon className="h-8 w-8" strokeWidth={1.75} />
+          </span>
+          <h1 className={`mt-5 text-3xl font-bold tracking-tight sm:text-4xl ${look.title}`}>{title}</h1>
+          <p className={`mx-auto mt-3 max-w-2xl leading-relaxed ${look.text}`}>{description}</p>
+        </div>
+      </section>
+      {/* ส่วนหัวโทนสว่างจบด้วยสีขาว — ไล่จางลงไปทับพื้นหลังเว็บ ไม่ให้ตัดเป็นเส้นตรงทับแสงสีแบรนด์ที่มุมจอ (เหมือนหน้าแรก) */}
+      {look.fade && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-full h-48 bg-linear-to-b from-white to-transparent"
+        />
+      )}
     </div>
+  )
+}
+
+/** เนื้อหาใต้ PageHero — ดึงขึ้นไปทับขอบล่างของส่วนหัว ความกว้างกำหนดผ่าน className (เช่น max-w-5xl) */
+export function PageBody({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`relative z-10 mx-auto -mt-16 box-content px-4 pb-20 ${className}`}>{children}</div>
+}
+
+/** หัวข้อย่อยในฟอร์มยาว — เลขลำดับ + ชื่อหัวข้อ · `divided` = มีเส้นคั่นด้านบน (ใช้กับทุกหัวข้อยกเว้นหัวข้อแรก) */
+export function FormSection({
+  number,
+  title,
+  hint,
+  divided,
+  children,
+}: {
+  number: number
+  title: string
+  hint?: string
+  divided?: boolean
+  children: ReactNode
+}) {
+  return (
+    <section className={`space-y-5 ${divided ? 'border-t border-navy-100 pt-7' : ''}`}>
+      <div>
+        <h2 className="flex items-center gap-2.5 font-semibold text-navy-900">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-700 ring-1 ring-brand-100">
+            {number}
+          </span>
+          {title}
+        </h2>
+        {hint && <p className="mt-1 pl-9.5 text-xs leading-relaxed text-navy-400">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** การ์ดคำแนะนำข้างฟอร์ม (จอกว้างอยู่ขวา จอแคบอยู่ใต้ฟอร์ม) */
+export function TipCard({ icon: Icon, title, children }: { icon: IconComponent; title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-navy-100 bg-white p-5 shadow-soft">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+          <Icon className="h-5 w-5" strokeWidth={2} />
+        </span>
+        <h2 className="font-semibold text-navy-900">{title}</h2>
+      </div>
+      <div className="mt-3 text-sm leading-relaxed text-navy-500">{children}</div>
+    </div>
+  )
+}
+
+export function TipList({ items }: { items: ReactNode[] }) {
+  return (
+    <ul className="space-y-2">
+      {items.map((item, index) => (
+        <li key={index} className="flex gap-2">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" strokeWidth={2.5} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

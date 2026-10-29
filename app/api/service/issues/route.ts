@@ -15,13 +15,10 @@ type IssueRow = {
   id: number
   description: string
   status: string
-  in_warranty: number
   created_at: string
   customer_name: string | null
   phone: string | null
   email: string | null
-  warranty_start: string | null
-  warranty_end: string | null
   sn: string
   product_name: string | null
   brand: string | null
@@ -44,8 +41,8 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(raw) && raw > 0 ? Math.min(Math.floor(raw), MAX_LIMIT) : 50
 
   const rows = await query<IssueRow>(
-    `SELECT ir.id, ir.description, ir.status, ir.in_warranty, ir.created_at,
-            r.customer_name, r.phone, r.email, r.warranty_start, r.warranty_end,
+    `SELECT ir.id, ir.description, ir.status, ir.created_at,
+            r.customer_name, r.phone, r.email,
             s.sn,
             p.name AS product_name, p.brand, p.model,
             (SELECT COUNT(*) FROM issue_attachments ia WHERE ia.issue_report_id = ir.id) AS file_count

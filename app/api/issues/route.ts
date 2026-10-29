@@ -4,7 +4,7 @@ import type { ResultSetHeader } from 'mysql2'
 import { queryOne, withTransaction } from '@/lib/db'
 import { issueReportSchema, firstIssueMessage, UPLOAD_LIMITS } from '@/lib/validations'
 import { saveUpload, UploadError, UPLOAD_ROOT, type SavedUpload } from '@/lib/uploads'
-import { caseNumber, isInWarranty } from '@/lib/warranty'
+import { caseNumber } from '@/lib/display'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
@@ -53,10 +53,9 @@ export async function POST(request: Request) {
   const registration = await queryOne<{
     id: number
     phone: string | null
-    warranty_end: string | null
     product_name: string
   }>(
-    `SELECT r.id, r.phone, r.warranty_end, p.name AS product_name
+    `SELECT r.id, r.phone, p.name AS product_name
      FROM registrations r
      JOIN serial_numbers s ON s.id = r.serial_number_id
      JOIN products p ON p.id = s.product_id
@@ -66,7 +65,7 @@ export async function POST(request: Request) {
 
   if (!registration) {
     return Response.json(
-      { error: 'ยังไม่พบการลงทะเบียนของ Serial Number นี้ กรุณาลงทะเบียนรับประกันก่อน' },
+      { error: 'ยังไม่พบการลงทะเบียนของ Serial Number นี้ กรุณาลงทะเบียนสินค้าก่อน' },
       { status: 404 }
     )
   }
@@ -82,14 +81,6 @@ export async function POST(request: Request) {
       { status: 403 }
     )
   }
-  if (!registration.warranty_end) {
-    return Response.json(
-      { error: 'สินค้านี้ยังไม่เริ่มระยะเวลาประกัน กรุณาติดต่อเจ้าหน้าที่ให้เริ่มประกันก่อนจึงจะแจ้งปัญหาได้' },
-      { status: 409 }
-    )
-  }
-
-  const inWarranty = isInWarranty(registration.warranty_end)
 
   const saved: SavedUpload[] = []
   try {
@@ -107,8 +98,8 @@ export async function POST(request: Request) {
   try {
     const issueId = await withTransaction(async (conn) => {
       const [inserted] = await conn.execute<ResultSetHeader>(
-        `INSERT INTO issue_reports (registration_id, description, in_warranty) VALUES (?, ?, ?)`,
-        [registration.id, description, inWarranty ? 1 : 0]
+        `INSERT INTO issue_reports (registration_id, description) VALUES (?, ?)`,
+        [registration.id, description]
       )
       for (const file of saved) {
         await conn.execute(
@@ -126,8 +117,6 @@ export async function POST(request: Request) {
           id: issueId,
           case_number: caseNumber(issueId),
           product_name: registration.product_name,
-          in_warranty: inWarranty,
-          warranty_end: registration.warranty_end,
           attachments: saved.length,
         },
       },

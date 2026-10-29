@@ -58,8 +58,8 @@ function LoginForm() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-soft-lg">
             <ShieldCheck className="h-6 w-6" strokeWidth={2.25} />
           </div>
-          <h1 className="text-xl font-bold text-white">ระบบจัดการรับประกันสินค้า</h1>
-          <p className="mt-1 text-sm text-navy-300">TJC WARRANTY</p>
+          <h1 className="text-xl font-bold text-white">ระบบจัดการลงทะเบียนสินค้า</h1>
+          <p className="mt-1 text-sm text-navy-300">TJC SERVICE</p>
         </div>
 
         <Card className="shadow-soft-lg">

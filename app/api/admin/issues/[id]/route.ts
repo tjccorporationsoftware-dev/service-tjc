@@ -1,7 +1,7 @@
 import { execute, queryOne } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 import { issueUpdateSchema, firstIssueMessage } from '@/lib/validations'
-import { caseNumber } from '@/lib/warranty'
+import { caseNumber } from '@/lib/display'
 
 export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/issues/[id]'>) {
   const auth = await requireAdmin()

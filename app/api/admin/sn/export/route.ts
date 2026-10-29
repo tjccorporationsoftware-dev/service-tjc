@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { query, type SqlParams } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
-import { SN_DISPLAY_STATUS_LABEL, snDisplayStatus } from '@/lib/warranty'
+import { SN_DISPLAY_STATUS_LABEL, snDisplayStatus } from '@/lib/display'
 import { getBrand } from '@/lib/brand'
 
 type Row = {
@@ -13,8 +13,6 @@ type Row = {
   // created_at เป็น DATETIME — mysql2 คืนเป็น Date เพราะ dateStrings ตั้งไว้เฉพาะ 'DATE'
   created_at: Date | string
   phone: string | null
-  // warranty_end เป็น DATE — คืนเป็นสตริง 'YYYY-MM-DD' ตาม dateStrings
-  warranty_end: string | null
 }
 
 // โทนสีเดียวกับธีมแอดมิน เพื่อให้ไฟล์ที่ส่งออกดูเป็นชุดเดียวกับหน้าจอ
@@ -25,7 +23,7 @@ const ROW_BAND = 'FFF4F8FC'
 
 const STATUS_COLOR: Record<string, string> = {
   available: 'FF5D7796', // ยังไม่ลงทะเบียน — เทาอมน้ำเงิน
-  started: 'FF2B6AA3', // เริ่มประกันแล้ว — ฟ้าแบรนด์
+  started: 'FF2B6AA3', // รอลูกค้ากรอกข้อมูล — ฟ้าแบรนด์
   registered: 'FF08745A', // ลงทะเบียนแล้ว — เขียว
   void: 'FFB91C1C', // ยกเลิก — แดง
 }
@@ -101,7 +99,7 @@ export async function GET(request: Request) {
 
   const rows = await query<Row>(
     `SELECT s.sn, s.status AS sn_status, s.category, s.created_at,
-            p.name AS product_name, p.model, r.phone, r.warranty_end
+            p.name AS product_name, p.model, r.phone
      FROM serial_numbers s
      LEFT JOIN products p ON p.id = s.product_id
      LEFT JOIN registrations r ON r.serial_number_id = s.id
@@ -111,7 +109,7 @@ export async function GET(request: Request) {
   )
 
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'ระบบลงทะเบียนรับประกันสินค้า'
+  workbook.creator = 'ระบบลงทะเบียนสินค้า'
   workbook.created = new Date()
 
   // ── ชีตหลัก ────────────────────────────────────────────────
@@ -127,7 +125,6 @@ export async function GET(request: Request) {
     { header: 'หมวดหมู่', key: 'category', width: 18 },
     { header: 'สถานะ', key: 'status', width: 20 },
     { header: 'วันที่สร้าง', key: 'created_at', width: 20 },
-    { header: 'วันหมดประกัน', key: 'warranty_end', width: 18 },
   ]
 
   const headerRow = sheet.getRow(1)
@@ -149,7 +146,6 @@ export async function GET(request: Request) {
       category: row.category ?? '',
       status: SN_DISPLAY_STATUS_LABEL[statusKey],
       created_at: toDate(row.created_at),
-      warranty_end: parseDateOnly(row.warranty_end),
     })
 
     added.alignment = { vertical: 'middle' }
@@ -158,7 +154,6 @@ export async function GET(request: Request) {
     added.getCell('sn').numFmt = '@'
     added.getCell('sn').font = { name: 'Consolas', size: 11 }
     added.getCell('created_at').numFmt = 'dd/mm/yyyy hh:mm'
-    added.getCell('warranty_end').numFmt = 'dd/mm/yyyy'
     added.getCell('status').font = {
       color: { argb: STATUS_COLOR[statusKey] ?? 'FF263548' },
       bold: true,

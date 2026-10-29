@@ -1,5 +1,9 @@
--- ระบบลงทะเบียนรับประกันสินค้า (Warranty Registration System)
+-- ระบบลงทะเบียนสินค้า (Product Registration System)
 -- MariaDB 10.4+
+--
+-- เลิกใช้การรับประกันทั้งระบบแล้ว — คอลัมน์ที่ขึ้นต้นด้วย "เลิกใช้" ด้านล่างไม่มีโค้ดอ่านหรือเขียนอีก
+-- แต่ยังต้องอยู่ใน schema เพราะ MIGRATIONS เก่าใน scripts/init-db.mjs (ซึ่งห้ามแก้) อ้างถึงชื่อคอลัมน์เหล่านี้
+-- ถ้าตัดออก db:init บน DB ใหม่จะล้ม และไม่ DROP ทิ้งเพื่อไม่ให้ข้อมูลประกันเดิมของบริษัทอื่นหายตอนรัน db:init
 
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -13,15 +17,18 @@ CREATE TABLE IF NOT EXISTS products (
   --   in_house = ผลิตเอง    -> เราออกรหัส SN เองจากหน้า "ตั้งค่ารหัส SN" แล้วค่อยผูกทีหลัง
   --   resale   = ซื้อมาขายต่อ -> มี SN ติดมากับตัวสินค้าจากโรงงานเดิม วางเข้าระบบได้เลย
   source_type ENUM('in_house','resale') NOT NULL DEFAULT 'in_house',
-  -- ระยะประกันแยก 3 หน่วย รวมกันเป็นระยะเวลาเดียว เช่น 1 ปี 6 เดือน 15 วัน
+  -- เลิกใช้: ระยะประกัน / ช่วงวันประกันของผลิตภัณฑ์ (ดูหัวไฟล์)
   warranty_years INT NOT NULL DEFAULT 0,
   warranty_months INT NOT NULL DEFAULT 0,
   warranty_days INT NOT NULL DEFAULT 0,
-  -- ช่วงวันประกันแบบตายตัวที่แอดมินกรอกไว้ (ไม่บังคับ) เช่น ล็อตที่ซื้อมาพร้อมประกันช่วงเดียวกันทั้งล็อต
-  -- ถ้ากรอกครบทั้งคู่ ระบบจะคำนวณ warranty_years/months/days จากช่วงนี้ให้อัตโนมัติ
   warranty_start_date DATE,
   warranty_end_date DATE,
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  -- ใครเป็นคนเพิ่มผลิตภัณฑ์นี้
+  --   admin    = แอดมินเพิ่มจากหน้า "ผลิตภัณฑ์"
+  --   customer = ลูกค้าพิมพ์ชื่อสินค้าเองตอนลงทะเบียนแล้วไม่ตรงกับตัวไหนในระบบ ระบบจึงสร้างให้
+  --              (สร้างแบบ is_active = 0 ไม่โชว์เป็นตัวเลือกให้ลูกค้าคนอื่นจนกว่าแอดมินจะเปิดใช้งาน)
+  added_by ENUM('admin','customer') NOT NULL DEFAULT 'admin',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,   -- 0 = ไม่โชว์เป็นตัวเลือกในหน้าลงทะเบียนของลูกค้า
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -51,7 +58,7 @@ CREATE TABLE IF NOT EXISTS serial_numbers (
   product_id INT,                            -- NULL = ยังไม่ผูกผลิตภัณฑ์ (สร้าง SN ไว้ก่อนได้)
   scheme_id INT,                              -- รูปแบบรหัสที่ใช้ตอนสร้าง (เผื่อตรวจสอบย้อนหลัง)
   status ENUM('available','registered','void') NOT NULL DEFAULT 'available',
-  generated_by INT,                          -- admin ที่สร้าง
+  generated_by INT,                          -- admin ที่สร้าง — NULL = ลูกค้าพิมพ์ SN ที่ไม่มีในระบบมาเองตอนลงทะเบียน
   batch_id VARCHAR(36),                      -- รหัสชุดที่ generate พร้อมกัน (ใช้ export)
   category VARCHAR(100),                     -- หมวดหมู่ที่แอดมินกรอกตอนสร้าง SN แต่ละชุด
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -67,19 +74,18 @@ CREATE TABLE IF NOT EXISTS serial_numbers (
 CREATE TABLE IF NOT EXISTS registrations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   serial_number_id INT NOT NULL UNIQUE,      -- 1 SN ลงทะเบียนได้ครั้งเดียว
-  -- phone/customer_name/email เป็น NULL ได้ทั้งคู่ = แอดมินเริ่มประกันตรงจากหน้า Serial Number
-  -- โดยที่ยังไม่มีลูกค้าคนไหน "รับ" (claim) ด้วยการลงทะเบียนผูกข้อมูลติดต่อ
+  -- phone/customer_name/email เป็น NULL ได้ = แถวเปล่าที่แอดมินสร้างไว้ด้วยปุ่ม "เริ่มประกัน" (ยุคก่อนเลิกใช้)
+  -- รอลูกค้ามา "รับ" (claim) ผ่านหน้าลงทะเบียน — ระบบปัจจุบันไม่สร้างแถวแบบนี้แล้ว
   phone VARCHAR(15),
   customer_name VARCHAR(255),
   email VARCHAR(255),
   registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  warranty_start DATE,                       -- NULL = ลงทะเบียนแล้วแต่ยังไม่เริ่มประกัน (รอแอดมินกด "เริ่มประกัน")
-  warranty_end DATE,                         -- คำนวณจาก warranty_start + ระยะประกันของผลิตภัณฑ์
-  -- วันที่ลูกค้ากรอกเองตอนลงทะเบียน (เช่น จำจากใบรับประกันกระดาษ) ใช้เทียบกับ warranty_start/end
-  -- ที่แอดมินกดเริ่มจริงเท่านั้น ไม่ใช่ค่าที่ระบบใช้คำนวณ
+  -- เลิกใช้: วันประกันของเครื่อง (ดูหัวไฟล์)
+  warranty_start DATE,
+  warranty_end DATE,
   customer_reported_warranty_start DATE,
   customer_reported_warranty_end DATE,
-  consent_accepted_at DATETIME,              -- เวลาที่ลูกค้ายอมรับเงื่อนไขการรับประกัน/ประกาศความเป็นส่วนตัว
+  consent_accepted_at DATETIME,              -- เวลาที่ลูกค้ายอมรับประกาศความเป็นส่วนตัว (PDPA)
   FOREIGN KEY (serial_number_id) REFERENCES serial_numbers(id),
   INDEX idx_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -89,7 +95,7 @@ CREATE TABLE IF NOT EXISTS issue_reports (
   registration_id INT NOT NULL,
   description TEXT NOT NULL,
   status ENUM('pending','in_progress','resolved','closed') NOT NULL DEFAULT 'pending',
-  in_warranty TINYINT(1) NOT NULL DEFAULT 1, -- ยังอยู่ในประกันตอนที่แจ้งหรือไม่
+  in_warranty TINYINT(1) NOT NULL DEFAULT 1, -- เลิกใช้ (ดูหัวไฟล์)
   admin_note TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -32,6 +32,146 @@
   --shadow-soft: 0 1px 2px rgba(16, 35, 55, 0.06), 0 6px 16px -6px rgba(16, 35, 55, 0.12);
   --shadow-soft-lg: 0 4px 8px rgba(16, 35, 55, 0.06), 0 24px 48px -16px rgba(16, 35, 55, 0.22);
   --shadow-inner-soft: inset 0 1px 2px rgba(16, 35, 55, 0.06);
+
+  /* หน้าแรก: การ์ดภาพประกอบลอยขึ้นลงช้า ๆ — ใช้คู่ motion-safe: เสมอ
+     ขยับด้วย property `translate` ไม่ใช่ transform จะได้ไม่ทับ rotate/translate ของ Tailwind v4 */
+  --animate-float: float 7s ease-in-out infinite;
+  @keyframes float {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    50% {
+      translate: 0 -10px;
+    }
+  }
+
+  /* ── หน้าแรก: ชุดอนิเมชัน (ใช้คู่ motion-safe: เสมอ — คนที่ตั้งลดการเคลื่อนไหวจะเห็นหน้านิ่งครบทุกส่วน) ──
+     ทุกตัวขยับด้วย property แยก (translate / scale / rotate) ไม่แตะ transform จึงซ้อนกับ utility ของ Tailwind ได้ */
+
+  /* ขึ้นมาจากด้านล่างพร้อมคลายเบลอ — ใช้ตอนหน้าโหลด ไล่ animation-delay ทีละชิ้น */
+  --animate-rise: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 28px;
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+      filter: blur(0);
+    }
+  }
+
+  /* ก้อนแสงสีแบรนด์ลอยไปมาช้า ๆ บนพื้นเข้ม */
+  --animate-aurora: aurora 18s ease-in-out infinite alternate;
+  @keyframes aurora {
+    0% {
+      translate: 0 0;
+      scale: 1;
+    }
+    50% {
+      translate: 8% -10%;
+      scale: 1.15;
+    }
+    100% {
+      translate: -10% 8%;
+      scale: 0.92;
+    }
+  }
+
+  /* ไล่สีวิ่งผ่านตัวหนังสือ (คู่กับ .text-shimmer) */
+  --animate-shimmer: shimmer 6s linear infinite;
+  @keyframes shimmer {
+    to {
+      background-position: 200% center;
+    }
+  }
+
+  --animate-orbit: orbit 40s linear infinite;
+  --animate-orbit-reverse: orbit 60s linear infinite reverse;
+  @keyframes orbit {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  /* เด้งขึ้นมา — ไอคอนติ๊กในการ์ดจำลอง */
+  --animate-pop: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  @keyframes pop {
+    0% {
+      opacity: 0;
+      scale: 0.3;
+    }
+    70% {
+      opacity: 1;
+      scale: 1.15;
+    }
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  /* แถบยืดจากซ้ายไปขวา — ใส่ origin-left คู่กันเสมอ */
+  --animate-grow-x: grow-x 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  @keyframes grow-x {
+    from {
+      scale: 0 1;
+    }
+    to {
+      scale: 1 1;
+    }
+  }
+
+  /* ละอองแสงลอยขึ้นแล้วจางหาย */
+  --animate-particle: particle 12s linear infinite;
+  @keyframes particle {
+    0% {
+      opacity: 0;
+      translate: 0 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 0.7;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 -560px;
+    }
+  }
+
+  /* แสงวาบพาดผ่านปุ่ม แล้วพักครู่หนึ่งก่อนวาบรอบใหม่ */
+  --animate-shine: shine 4.5s ease-in-out infinite;
+  @keyframes shine {
+    0%,
+    55% {
+      translate: -150% 0;
+    }
+    100% {
+      translate: 350% 0;
+    }
+  }
+
+  /* เส้นแสงกวาดลงตามตารางพื้นหลัง hero */
+  --animate-beam: beam 8s ease-in-out infinite;
+  @keyframes beam {
+    0% {
+      top: 0%;
+      opacity: 0;
+    }
+    10%,
+    90% {
+      opacity: 1;
+    }
+    100% {
+      top: 100%;
+      opacity: 0;
+    }
+  }
 }
 
 html {
@@ -52,6 +192,210 @@ body {
     radial-gradient(circle 650px at 0% 0%, var(--color-brand-400) 0%, transparent 100%),
     radial-gradient(circle 650px at 100% 100%, var(--color-brand-500) 0%, transparent 100%);
   background-attachment: fixed;
+}
+
+/* ส่วนหัวโทนเข้มฝั่งลูกค้า (HeroBackdrop ใน components/ui.tsx): เส้นตารางจาง ๆ ค่อย ๆ จางหายจากกลางด้านบนลงมา */
+.hero-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 35%, transparent 100%);
+}
+
+/* แถบเมนูฝั่งลูกค้า (app/(customer)/layout.tsx): เลื่อนลงจาก 0 ถึง 160px แล้วพื้นค่อย ๆ ทึบขึ้นพร้อมเงา
+   เป็นการเปลี่ยนสี ไม่ใช่การเคลื่อนไหว จึงไม่ต้องอยู่ใต้ prefers-reduced-motion
+   เบราว์เซอร์ที่ไม่รองรับ scroll() จะได้พื้นกระจกโปร่งตามเดิมตลอด */
+@keyframes header-solidify {
+  to {
+    background-color: color-mix(in srgb, var(--color-navy-900) 94%, transparent);
+    box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.55);
+  }
+}
+@supports (animation-timeline: scroll()) {
+  .header-solidify {
+    animation: header-solidify linear both;
+    animation-timeline: scroll();
+    animation-range: 0 160px;
+  }
+}
+
+/* แถบเมนูสีสว่าง (design eco / clinical) — เลื่อนลงแล้วขาวทึบขึ้นพร้อมเงาบาง ๆ */
+@keyframes header-solidify-light {
+  to {
+    background-color: rgb(255 255 255 / 0.97);
+    box-shadow: 0 10px 30px -18px rgb(16 35 55 / 0.35);
+  }
+}
+@supports (animation-timeline: scroll()) {
+  .header-solidify-light {
+    animation: header-solidify-light linear both;
+    animation-timeline: scroll();
+    animation-range: 0 160px;
+  }
+}
+
+/* ── ของตกแต่งตาม design (components/decor.tsx) ───────────────────────────── */
+
+/* eco: รัศมีแสงอาทิตย์ — ซี่สีแบรนด์ซ้ำรอบวง จางออกจากกลาง */
+.eco-rays {
+  background: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in oklab, var(--color-brand-300) 45%, transparent) 0deg 3deg,
+    transparent 3deg 15deg
+  );
+  mask-image: radial-gradient(circle, #000 16%, transparent 68%);
+}
+
+/* eco: คลื่นน้ำเลื่อนไปครึ่งความกว้าง (SVG กว้าง 200% มีคลื่นซ้ำ 2 ลูก) แล้ววนกลับต่อกันพอดี */
+@keyframes wave {
+  to {
+    translate: -50% 0;
+  }
+}
+
+/* eco: วงแหวนความคืบหน้า — วาดจาก 0 ไปถึง stroke-dashoffset ที่ตั้งไว้บน element (pathLength=100) */
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+
+/* เส้นขีดเขียนตัวเอง (pathLength=1 + stroke-dasharray: 1) — ไม่มีอนิเมชันก็เห็นเส้นเต็ม */
+@keyframes draw-path {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+/* clinical: ลายกากบาทการแพทย์ — ใช้ mask รูปกากบาทกับพื้นสีแบรนด์ สีจึงเปลี่ยนตาม BRAND_COLOR_PRIMARY */
+.cross-pattern {
+  background-color: var(--color-brand-200);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M20 15h4v5h5v4h-5v5h-4v-5h-5v-4h5z'/%3E%3C/svg%3E")
+    0 0 / 44px 44px repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M20 15h4v5h5v4h-5v5h-4v-5h-5v-4h5z'/%3E%3C/svg%3E")
+    0 0 / 44px 44px repeat;
+}
+
+/* clinical: ช่วงสว่างของเส้นคลื่นหัวใจ (pathLength=1000) — เลื่อน dashoffset 1000 → 0 = วิ่งจากซ้ายไปขวา */
+.ecg-trace {
+  stroke-dasharray: 170 830;
+  stroke-dashoffset: 1000;
+}
+@keyframes ecg {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── หน้าแรก ─────────────────────────────────────────────────────────────── */
+
+/* ตัวหนังสือไล่สีแบรนด์ มีแสงขาวพาดกลาง — ใส่ motion-safe:animate-shimmer เพื่อให้แสงวิ่ง */
+.text-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-brand-300) 0%,
+    var(--color-brand-200) 20%,
+    #ffffff 35%,
+    var(--color-brand-300) 50%,
+    var(--color-brand-200) 70%,
+    #ffffff 85%,
+    var(--color-brand-300) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ตัวเลขใหญ่บนพื้นขาว — ไล่สีแบรนด์แบบนิ่ง */
+.text-brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-800));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ขอบเรืองแสงหมุนรอบกล่อง (conic gradient) — กล่องต้องมี rounded-* และ position ไม่ใช่ static */
+@property --glow-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.border-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0deg,
+    var(--color-brand-300) 50deg,
+    transparent 110deg,
+    transparent 180deg,
+    var(--color-brand-500) 230deg,
+    transparent 290deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+@keyframes glow-spin {
+  to {
+    --glow-angle: 360deg;
+  }
+}
+
+/* โผล่ขึ้นมาตอนเลื่อนถึง (scroll-driven) — --reveal-i ไล่จุดเริ่มทีละใบในกริด แต่ทุกใบจบที่ "entry 100%"
+   (ขอบล่างพ้นจอเข้ามาแล้ว) — อะไรที่เห็นเต็มใบต้องชัดเต็มที่เสมอ ไม่ค้างจาง ๆ ถ้าผู้ใช้หยุดเลื่อนกลางทาง
+   เบราว์เซอร์ที่ยังไม่รองรับ animation-timeline จะเห็นเนื้อหาปกติ ไม่มีอะไรซ่อน */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    translate: 0 56px;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+@keyframes draw-x {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .border-glow::before {
+    animation: glow-spin 6s linear infinite;
+  }
+
+  @supports (animation-timeline: view()) {
+    /* shorthand ต้องมาก่อน animation-timeline เสมอ ไม่งั้นมันรีเซ็ต timeline กลับเป็น auto */
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry calc(var(--reveal-i, 0) * 8%) entry 100%;
+    }
+    .draw-x {
+      animation: draw-x linear both;
+      animation-timeline: view();
+      animation-range: entry 40% cover 45%;
+    }
+  }
 }
 
 /* ตัวเลข/SN อ่านง่ายขึ้นเมื่อเรียงเป็นคอลัมน์ */

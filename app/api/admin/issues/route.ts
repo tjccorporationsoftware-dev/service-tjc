@@ -1,7 +1,7 @@
 import { query, queryOne, type SqlParams } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 import { parsePagination, meta } from '@/lib/pagination'
-import { caseNumber } from '@/lib/warranty'
+import { caseNumber } from '@/lib/display'
 import { fileUrl } from '@/lib/uploads'
 
 type Row = {
@@ -9,14 +9,12 @@ type Row = {
   registration_id: number
   description: string
   status: string
-  in_warranty: number
   admin_note: string | null
   created_at: string
   updated_at: string
   sn: string
   phone: string
   customer_name: string | null
-  warranty_end: string
   product_name: string
 }
 
@@ -54,9 +52,9 @@ export async function GET(request: Request) {
   )
 
   const rows = await query<Row>(
-    `SELECT i.id, i.registration_id, i.description, i.status, i.in_warranty,
+    `SELECT i.id, i.registration_id, i.description, i.status,
             i.admin_note, i.created_at, i.updated_at,
-            s.sn, r.phone, r.customer_name, r.warranty_end, p.name AS product_name
+            s.sn, r.phone, r.customer_name, p.name AS product_name
      FROM issue_reports i
      JOIN registrations r ON r.id = i.registration_id
      JOIN serial_numbers s ON s.id = r.serial_number_id
@@ -81,7 +79,6 @@ export async function GET(request: Request) {
     issues: rows.map((row) => ({
       ...row,
       case_number: caseNumber(row.id),
-      in_warranty: Boolean(row.in_warranty),
       attachments: attachments
         .filter((a) => a.issue_report_id === row.id)
         .map((a) => ({ type: a.file_type, url: fileUrl(a.file_path) })),

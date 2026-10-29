@@ -1,7 +1,6 @@
 import { execute, queryOne } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 import { productSchema, firstIssueMessage } from '@/lib/validations'
-import { formatDuration, resolveWarrantyDuration } from '@/lib/warranty'
 
 export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/products/[id]'>) {
   const auth = await requireAdmin()
@@ -24,27 +23,9 @@ export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/prod
   if (!parsed.success) {
     return Response.json({ error: firstIssueMessage(parsed.error) }, { status: 400 })
   }
-  const {
-    name,
-    brand,
-    model,
-    source_type,
-    warranty_years,
-    warranty_months,
-    warranty_days,
-    is_active,
-  } = parsed.data
+  const { name, brand, model, source_type, is_active } = parsed.data
   // เว้นว่าง = NULL ไม่ใช่ '' เพราะคอลัมน์เป็น UNIQUE (ดู db/schema.sql)
   const code = parsed.data.code || null
-  const startDate = parsed.data.warranty_start_date || null
-  const endDate = parsed.data.warranty_end_date || null
-
-  // กรอกช่วงวันมาครบทั้งคู่ = ให้ช่วงวันเป็นตัวตั้ง ระยะประกันคำนวณตามนั้น
-  const duration = resolveWarrantyDuration(
-    { years: warranty_years, months: warranty_months, days: warranty_days },
-    startDate,
-    endDate
-  )
 
   const existing = await queryOne<{ id: number; code: string | null; serial_count: number }>(
     `SELECT p.id, p.code,
@@ -80,24 +61,9 @@ export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/prod
 
   await execute(
     `UPDATE products
-     SET name = ?, code = ?, brand = ?, model = ?, source_type = ?,
-         warranty_years = ?, warranty_months = ?, warranty_days = ?,
-         warranty_start_date = ?, warranty_end_date = ?, is_active = ?
+     SET name = ?, code = ?, brand = ?, model = ?, source_type = ?, is_active = ?
      WHERE id = ?`,
-    [
-      name,
-      code,
-      brand || null,
-      model || null,
-      source_type,
-      duration.years,
-      duration.months,
-      duration.days,
-      startDate,
-      endDate,
-      is_active === false ? 0 : 1,
-      productId,
-    ]
+    [name, code, brand || null, model || null, source_type, is_active === false ? 0 : 1, productId]
   )
 
   await execute('INSERT INTO audit_logs (admin_id, action, detail) VALUES (?, ?, ?)', [
@@ -105,7 +71,7 @@ export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/prod
     'product.update',
     `แก้ไขผลิตภัณฑ์ #${productId} "${name}" (${code ?? 'ไม่ระบุรหัส'}, ${
       source_type === 'in_house' ? 'ผลิตเอง' : 'ซื้อมาขายต่อ'
-    }, ประกัน ${formatDuration(duration)})`,
+    })`,
   ])
 
   return Response.json({
@@ -116,12 +82,6 @@ export async function PATCH(request: Request, ctx: RouteContext<'/api/admin/prod
       brand: brand || null,
       model: model || null,
       source_type,
-      warranty_years: duration.years,
-      warranty_months: duration.months,
-      warranty_days: duration.days,
-      warranty_start_date: startDate,
-      warranty_end_date: endDate,
-      warranty_text: formatDuration(duration),
       is_active: is_active === false ? 0 : 1,
     },
   })

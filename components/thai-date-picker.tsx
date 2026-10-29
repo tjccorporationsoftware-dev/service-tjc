@@ -45,7 +45,7 @@ export type ThaiDatePickerProps = {
 
 const POPUP_HEIGHT = 340
 
-/** ช่วงปีใน dropdown — กว้างพอสำหรับวันซื้อย้อนหลังและวันหมดประกันในอนาคต */
+/** ช่วงปีใน dropdown — กว้างพอสำหรับทั้งวันย้อนหลังหลายสิบปีและวันในอนาคต */
 const YEAR_BACK = 60
 const YEAR_FORWARD = 20
 const YEAR_HARD_LIMIT = 200

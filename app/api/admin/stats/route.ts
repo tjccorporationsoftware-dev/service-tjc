@@ -18,18 +18,12 @@ export async function GET() {
      FROM serial_numbers`
   )
 
-  const warranty = await queryOne<{
-    total: number
-    not_started: number
-    active: number
-    expiring_soon: number
-  }>(
+  // นับเฉพาะแถวที่มีข้อมูลลูกค้าแล้ว — registration เปล่าจากยุค "เริ่มประกัน" ยังไม่ใช่การลงทะเบียนของลูกค้า
+  const registrations = await queryOne<{ total: number; this_month: number }>(
     `SELECT COUNT(*) AS total,
-            SUM(warranty_start IS NULL) AS not_started,
-            SUM(warranty_end >= CURDATE()) AS active,
-            SUM(warranty_end >= CURDATE() AND warranty_end < CURDATE() + INTERVAL 30 DAY)
-              AS expiring_soon
-     FROM registrations`
+            SUM(registered_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) AS this_month
+     FROM registrations
+     WHERE phone IS NOT NULL`
   )
 
   const issues = await queryOne<{
@@ -67,11 +61,9 @@ export async function GET() {
       registered: num(serials?.registered),
       void: num(serials?.void_count),
     },
-    warranty: {
-      total: num(warranty?.total),
-      not_started: num(warranty?.not_started),
-      active: num(warranty?.active),
-      expiring_soon: num(warranty?.expiring_soon),
+    registrations: {
+      total: num(registrations?.total),
+      this_month: num(registrations?.this_month),
     },
     issues: {
       total: num(issues?.total),

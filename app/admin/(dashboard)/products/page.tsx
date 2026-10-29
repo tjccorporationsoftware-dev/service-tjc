@@ -9,7 +9,6 @@ import {
   Button,
   Card,
   CardHeader,
-  DateInput,
   Field,
   Input,
   TableEmpty,
@@ -19,8 +18,8 @@ import {
   Th,
   formatDate,
 } from '@/components/admin/ui'
+import { SITE } from '@/lib/site-content'
 import { useApiList } from '@/lib/use-api-list'
-import { addDuration, formatDuration, resolveWarrantyDuration, toDateString } from '@/lib/warranty'
 
 /** ที่มาของสินค้า — ตัดสินว่าใครเป็นคนออกรหัส SN (ดู db/schema.sql) */
 type SourceType = 'in_house' | 'resale'
@@ -60,12 +59,7 @@ type Product = {
   brand: string | null
   model: string | null
   source_type: SourceType
-  warranty_years: number
-  warranty_months: number
-  warranty_days: number
-  warranty_start_date: string | null
-  warranty_end_date: string | null
-  warranty_text: string
+  added_by: 'admin' | 'customer'
   is_active: number
   created_at: string
   serial_count: number
@@ -80,11 +74,6 @@ const EMPTY_FORM = {
   model: '',
   // ตั้งต้นเป็นค่าว่าง = ยังไม่เลือก ฟอร์มที่เหลือจะยังไม่แสดงจนกว่าจะเลือกประเภทก่อน
   source_type: '' as SourceType | '',
-  warranty_years: '1',
-  warranty_months: '0',
-  warranty_days: '0',
-  warranty_start_date: '',
-  warranty_end_date: '',
   is_active: true,
 }
 
@@ -136,11 +125,6 @@ export default function ProductsPage() {
       brand: product.brand ?? '',
       model: product.model ?? '',
       source_type: product.source_type ?? 'in_house',
-      warranty_years: String(product.warranty_years),
-      warranty_months: String(product.warranty_months),
-      warranty_days: String(product.warranty_days),
-      warranty_start_date: product.warranty_start_date ?? '',
-      warranty_end_date: product.warranty_end_date ?? '',
       is_active: product.is_active === 1,
     })
     setCreateSnText('')
@@ -273,12 +257,8 @@ export default function ProductsPage() {
         code: product.code ?? '',
         brand: product.brand ?? '',
         model: product.model ?? '',
-        warranty_years: product.warranty_years,
-        warranty_months: product.warranty_months,
-        warranty_days: product.warranty_days,
-        // ส่งช่วงวันเดิมกลับไปด้วย ไม่งั้นการสลับสถานะจะล้างค่าที่ตั้งไว้ทิ้ง
-        warranty_start_date: product.warranty_start_date ?? '',
-        warranty_end_date: product.warranty_end_date ?? '',
+        // ไม่ส่ง = schema ตั้งเป็น in_house ให้ — สินค้าซื้อมาขายต่อจะกลายเป็นผลิตเองแค่เพราะกดสลับสถานะ
+        source_type: product.source_type,
         is_active: product.is_active !== 1,
       }),
     })
@@ -343,12 +323,6 @@ export default function ProductsPage() {
   const lockedCode =
     editingId !== null && (products.find((p) => p.id === editingId)?.serial_count ?? 0) > 0
 
-  // แสดงผลลัพธ์ให้เห็นทันทีขณะกรอก โดยใช้ตรรกะเดียวกับฝั่งเซิร์ฟเวอร์
-  const manualDuration = {
-    years: Number(form.warranty_years) || 0,
-    months: Number(form.warranty_months) || 0,
-    days: Number(form.warranty_days) || 0,
-  }
   // เลือกประเภทแล้วถึงจะโชว์ช่องกรอกที่เหลือ (ตอนแก้ไขมีค่าอยู่แล้ว จึงโชว์ทันที)
   const formReady = form.source_type !== ''
 
@@ -358,27 +332,12 @@ export default function ProductsPage() {
   // ผลิตเองเลือก SN ที่ออกรหัสไว้แล้วมาเชื่อมได้ ทั้งตอนเพิ่มใหม่และตอนแก้ไข
   const canLinkSn = form.source_type === 'in_house'
 
-  // กรอกช่วงวันครบทั้งคู่เมื่อไหร่ ช่วงวันจะเป็นตัวตั้งแทนช่อง ปี/เดือน/วัน ที่กรอกไว้
-  const bothDatesFilled = Boolean(form.warranty_start_date && form.warranty_end_date)
-  const invalidRange = bothDatesFilled && form.warranty_end_date < form.warranty_start_date
-  const fromDateRange = bothDatesFilled && !invalidRange
-  const duration = resolveWarrantyDuration(
-    manualDuration,
-    form.warranty_start_date || null,
-    form.warranty_end_date || null
-  )
-  const hasDuration = duration.years + duration.months + duration.days > 0
-  const preview = hasDuration ? formatDuration(duration) : 'ยังไม่ได้ระบุ'
-  // ช่วงวันตายตัวอยู่แล้ว ไม่ต้องเดาวันหมดประกันจากวันนี้
-  const previewEnd =
-    hasDuration && !fromDateRange ? toDateString(addDuration(new Date(), duration)) : null
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-navy-900">จัดการผลิตภัณฑ์</h1>
         <p className="mt-0.5 text-sm text-navy-400">
-          เพิ่มและจัดการข้อมูลผลิตภัณฑ์ รหัสสินค้า ระยะเวลารับประกัน และสถานะการใช้งาน —
+          เพิ่มและจัดการข้อมูลผลิตภัณฑ์ รหัสสินค้า และสถานะการใช้งาน —
           แยกประเภทได้ว่าเป็นสินค้าที่ผลิตเองหรือซื้อมาขายต่อ
         </p>
       </div>
@@ -469,7 +428,7 @@ export default function ProductsPage() {
                   <Input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="เช่น สมาร์ททีวี 65 นิ้ว"
+                    placeholder={`เช่น ${SITE.examples.productName}`}
                     maxLength={255}
                     required
                   />
@@ -479,7 +438,7 @@ export default function ProductsPage() {
                   <Input
                     value={form.brand}
                     onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                    placeholder="ไม่บังคับ เช่น SmartHome"
+                    placeholder={`ไม่บังคับ เช่น ${SITE.examples.brand}`}
                     maxLength={100}
                   />
                 </Field>
@@ -497,7 +456,7 @@ export default function ProductsPage() {
                     onChange={(e) =>
                       setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })
                     }
-                    placeholder="ไม่บังคับ เช่น TV65"
+                    placeholder={`ไม่บังคับ เช่น ${SITE.examples.productCode}`}
                     className="font-mono"
                     maxLength={10}
                     disabled={lockedCode}
@@ -508,7 +467,7 @@ export default function ProductsPage() {
                   <Input
                     value={form.model}
                     onChange={(e) => setForm({ ...form, model: e.target.value })}
-                    placeholder="ไม่บังคับ เช่น ST-65A"
+                    placeholder={`ไม่บังคับ เช่น ${SITE.examples.model}`}
                     maxLength={100}
                   />
                 </Field>
@@ -524,7 +483,7 @@ export default function ProductsPage() {
                     <Textarea
                       value={createSnText}
                       onChange={(e) => setCreateSnText(e.target.value)}
-                      placeholder="เช่น EXT-SN-00123"
+                      placeholder={`เช่น ${SITE.examples.serial}`}
                       rows={1}
                       className="resize-y font-mono"
                     />
@@ -532,7 +491,7 @@ export default function ProductsPage() {
                 )}
 
                 {canPasteSn && createSnText.trim() && (
-                  <Field label="หมวดหมู่ (SN)" required hint="เช่น เครื่องมือวินิจฉัย, อุปกรณ์ช่วยชีวิต">
+                  <Field label="หมวดหมู่ (SN)" required hint={`เช่น ${SITE.examples.snCategory}`}>
                     <Input
                       value={createSnCategory}
                       onChange={(e) => setCreateSnCategory(e.target.value)}
@@ -541,86 +500,7 @@ export default function ProductsPage() {
                     />
                   </Field>
                 )}
-
-                {/* วันเริ่ม–วันสิ้นสุดอยู่ในช่องเดียวกัน ฝั่งเดียวของกริด แบ่งครึ่งเท่ากันข้างใน
-                    (แพตเทิร์นเดียวกับช่อง "ระยะประกัน" ที่ยัด 3 ช่องย่อยไว้ในเซลล์เดียว) */}
-                <Field
-                  label="ช่วงวันประกัน"
-                  hint="ไม่บังคับ — ช่องซ้ายวันเริ่ม ช่องขวาวันสิ้นสุด กรอกครบทั้งคู่แล้วระบบจะคำนวณระยะประกันให้อัตโนมัติ"
-                >
-                  {/* ไม่ใส่ label ย่อยเหนือ input เพราะจะดันให้ช่องนี้สูงกว่าช่องอื่นจนแถวไม่ตรงแนว */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <DateInput
-                      value={form.warranty_start_date}
-                      onChange={(iso) => setForm({ ...form, warranty_start_date: iso })}
-                      aria-label="วันเริ่มประกัน"
-                      className="min-w-0 px-2 text-sm"
-                    />
-                    <DateInput
-                      value={form.warranty_end_date}
-                      onChange={(iso) => setForm({ ...form, warranty_end_date: iso })}
-                      min={form.warranty_start_date || undefined}
-                      aria-label="วันสิ้นสุดประกัน"
-                      className="min-w-0 px-2 text-sm"
-                    />
-                  </div>
-                </Field>
-
-                <Field
-                  label="ระยะประกัน"
-                  hint={
-                    fromDateRange
-                      ? 'คำนวณจากช่วงวันที่ด้านบนให้แล้ว — ล้างวันที่ออกถ้าต้องการกรอกเอง'
-                      : 'ไม่บังคับ — กรอกได้ทั้ง 3 หน่วย ระบบจะรวมเป็นระยะเวลาเดียว'
-                  }
-                >
-                  <div className="grid grid-cols-3 gap-2">
-                    <DurationInput
-                      label="ปี"
-                      max={50}
-                      value={fromDateRange ? String(duration.years) : form.warranty_years}
-                      onChange={(v) => setForm({ ...form, warranty_years: v })}
-                      disabled={fromDateRange}
-                    />
-                    <DurationInput
-                      label="เดือน"
-                      max={600}
-                      value={fromDateRange ? String(duration.months) : form.warranty_months}
-                      onChange={(v) => setForm({ ...form, warranty_months: v })}
-                      disabled={fromDateRange}
-                    />
-                    <DurationInput
-                      label="วัน"
-                      max={3650}
-                      value={fromDateRange ? String(duration.days) : form.warranty_days}
-                      onChange={(v) => setForm({ ...form, warranty_days: v })}
-                      disabled={fromDateRange}
-                    />
-                  </div>
-                </Field>
               </div>
-
-              {invalidRange ? (
-                <Alert tone="warning">วันที่สิ้นสุดประกันต้องไม่ก่อนวันที่เริ่มประกัน</Alert>
-              ) : (
-                <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-sm">
-                  <span className="text-navy-500">ระยะประกันที่จะบันทึก: </span>
-                  <span className="font-semibold text-brand-700">{preview}</span>
-                  {fromDateRange && (
-                    <span className="text-navy-500">
-                      {' '}
-                      — คำนวณจาก {formatDate(form.warranty_start_date)} ถึง{' '}
-                      {formatDate(form.warranty_end_date)}
-                    </span>
-                  )}
-                  {previewEnd && (
-                    <span className="text-navy-500">
-                      {' '}
-                      — ถ้าลงทะเบียนวันนี้จะหมดประกัน {formatDate(previewEnd)}
-                    </span>
-                  )}
-                </div>
-              )}
 
               {/* ผลิตเองออกรหัส SN ไว้ก่อนโดยยังไม่มีเจ้าของ — ตรงนี้คือจุดที่จับคู่เข้ากับผลิตภัณฑ์ */}
               {canLinkSn && (
@@ -644,7 +524,7 @@ export default function ProductsPage() {
                 </label>
               )}
 
-              <Button type="submit" disabled={saving || invalidRange}>
+              <Button type="submit" disabled={saving}>
                 <Sparkles className="h-4 w-4" />
                 {saving ? 'กำลังบันทึก…' : editingId ? 'บันทึกการแก้ไข' : 'เพิ่มผลิตภัณฑ์'}
               </Button>
@@ -665,16 +545,15 @@ export default function ProductsPage() {
                 <Th>รหัส</Th>
                 <Th>ยี่ห้อ</Th>
                 <Th>รุ่น</Th>
-                <Th>ระยะประกัน</Th>
                 <Th>SN ที่สร้างแล้ว</Th>
                 <Th>สถานะ</Th>
                 <Th>จัดการ</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-50">
-              {loading && <TableLoading colSpan={9} />}
+              {loading && <TableLoading colSpan={8} />}
               {!loading && products.length === 0 && (
-                <TableEmpty colSpan={9}>
+                <TableEmpty colSpan={8}>
                   <Package className="mx-auto mb-2 h-8 w-8 text-navy-200" strokeWidth={1.5} />
                   ยังไม่มีผลิตภัณฑ์
                 </TableEmpty>
@@ -687,22 +566,18 @@ export default function ProductsPage() {
                       <div className="text-xs text-navy-300">เพิ่มเมื่อ {formatDate(product.created_at)}</div>
                     </Td>
                     <Td>
-                      <Badge tone={product.source_type === 'resale' ? 'amber' : 'brand'}>
-                        {SOURCE_LABEL[product.source_type] ?? SOURCE_LABEL.in_house}
-                      </Badge>
+                      {/* ลูกค้าพิมพ์เพิ่มเองตอนลงทะเบียน ไม่มีใครเลือกประเภทให้ — โชว์ที่มาแทนค่าเริ่มต้นที่ไม่มีความหมาย */}
+                      {product.added_by === 'customer' ? (
+                        <Badge tone="slate">ลูกค้าเพิ่มเอง</Badge>
+                      ) : (
+                        <Badge tone={product.source_type === 'resale' ? 'amber' : 'brand'}>
+                          {SOURCE_LABEL[product.source_type] ?? SOURCE_LABEL.in_house}
+                        </Badge>
+                      )}
                     </Td>
                     <Td className="font-mono">{product.code || <span className="text-navy-300">—</span>}</Td>
                     <Td className="text-navy-500">{product.brand || '—'}</Td>
                     <Td className="text-navy-500">{product.model || '—'}</Td>
-                    <Td className="whitespace-nowrap">
-                      {product.warranty_text}
-                      {product.warranty_start_date && product.warranty_end_date && (
-                        <div className="text-xs text-navy-300">
-                          {formatDate(product.warranty_start_date)} –{' '}
-                          {formatDate(product.warranty_end_date)}
-                        </div>
-                      )}
-                    </Td>
                     <Td className="tabular">{Number(product.serial_count).toLocaleString('th-TH')}</Td>
                     <Td>
                       {product.is_active === 1 ? (
@@ -748,6 +623,10 @@ export default function ProductsPage() {
           ผลิตภัณฑ์ที่มี SN ผูกอยู่แล้วจะลบไม่ได้ — ใช้ &ldquo;ปิดใช้งาน&rdquo; แทน
           เพื่อซ่อนจากหน้าลงทะเบียนของลูกค้าโดยไม่กระทบข้อมูลเดิม
         </p>
+        <p className="mt-1 text-xs text-navy-400">
+          ผลิตภัณฑ์ &ldquo;ลูกค้าเพิ่มเอง&rdquo; ถูกสร้างอัตโนมัติตอนลูกค้าพิมพ์ชื่อสินค้าที่ไม่ตรงกับรายการ
+          และปิดใช้งานไว้ก่อน — กด &ldquo;เปิดใช้งาน&rdquo; ถ้าต้องการให้ลูกค้าคนอื่นเห็นเป็นตัวเลือกด้วย
+        </p>
       </Card>
 
       {addSnProduct && (
@@ -782,14 +661,14 @@ export default function ProductsPage() {
                 <Textarea
                   value={addSnText}
                   onChange={(e) => setAddSnText(e.target.value)}
-                  placeholder={'เช่น\nEXT-SN-00123\nEXT-SN-00124'}
+                  placeholder={`เช่น\n${SITE.examples.serial}\n(หนึ่งรายการต่อบรรทัด)`}
                   rows={6}
                   className="font-mono"
                   disabled={addingSn}
                   required
                 />
               </Field>
-              <Field label="หมวดหมู่" required hint="เช่น เครื่องมือวินิจฉัย, อุปกรณ์ช่วยชีวิต">
+              <Field label="หมวดหมู่" required hint={`เช่น ${SITE.examples.snCategory}`}>
                 <Input
                   value={addSnCategory}
                   onChange={(e) => setAddSnCategory(e.target.value)}
@@ -823,37 +702,6 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function DurationInput({
-  label,
-  max,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string
-  max: number
-  value: string
-  onChange: (value: string) => void
-  disabled?: boolean
-}) {
-  return (
-    <div className="relative">
-      <Input
-        type="number"
-        min={0}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="pr-12 text-right"
-      />
-      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-navy-300">
-        {label}
-      </span>
     </div>
   )
 }

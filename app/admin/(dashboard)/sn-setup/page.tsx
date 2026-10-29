@@ -17,6 +17,7 @@ import {
 } from '@/components/admin/ui'
 import { useApiList } from '@/lib/use-api-list'
 import { buildStructuredSn, snDateCode, SEQUENCE_PAD } from '@/lib/sn-format'
+import { SITE } from '@/lib/site-content'
 
 type Scheme = {
   id: number
@@ -167,11 +168,11 @@ export default function SnSetupPage() {
           }
         />
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="ชื่อเรียก" required hint="เช่น เตียงผู้ป่วยไฟฟ้า">
+          <Field label="ชื่อเรียก" required hint={`เช่น ${SITE.examples.snSchemeLabel}`}>
             <Input
               value={form.label}
               onChange={(e) => setForm({ ...form, label: e.target.value })}
-              placeholder="เตียงผู้ป่วยไฟฟ้า"
+              placeholder={SITE.examples.snSchemeLabel}
               maxLength={255}
               required
             />

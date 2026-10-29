@@ -18,12 +18,12 @@ const connectionConfig = {
 }
 
 const SEED_PRODUCTS = [
-  { name: 'เตียงผู้ป่วยไฟฟ้า 3 ไก', code: 'BED01', brand: 'MediCare', model: 'HB-300E', years: 2, months: 0, days: 0 },
-  { name: 'เครื่องเอกซเรย์เคลื่อนที่', code: 'XRAY01', brand: 'RadiTech', model: 'MX-500', years: 3, months: 0, days: 0 },
-  { name: 'เครื่องช่วยหายใจ', code: 'VENT01', brand: 'PulmoCare', model: 'VT-750', years: 2, months: 0, days: 0 },
-  { name: 'เครื่องอัลตราซาวด์', code: 'USND01', brand: 'SonoMed', model: 'US-9000', years: 3, months: 0, days: 0 },
-  { name: 'เครื่องฟอกไต', code: 'DIAL01', brand: 'RenalPlus', model: 'DX-200', years: 2, months: 0, days: 0 },
-  { name: 'เครื่องมอนิเตอร์สัญญาณชีพ', code: 'MON01', brand: 'VitalWatch', model: 'PM-100', years: 1, months: 0, days: 0 },
+  { name: 'เตียงผู้ป่วยไฟฟ้า 3 ไก', code: 'BED01', brand: 'MediCare', model: 'HB-300E' },
+  { name: 'เครื่องเอกซเรย์เคลื่อนที่', code: 'XRAY01', brand: 'RadiTech', model: 'MX-500' },
+  { name: 'เครื่องช่วยหายใจ', code: 'VENT01', brand: 'PulmoCare', model: 'VT-750' },
+  { name: 'เครื่องอัลตราซาวด์', code: 'USND01', brand: 'SonoMed', model: 'US-9000' },
+  { name: 'เครื่องฟอกไต', code: 'DIAL01', brand: 'RenalPlus', model: 'DX-200' },
+  { name: 'เครื่องมอนิเตอร์สัญญาณชีพ', code: 'MON01', brand: 'VitalWatch', model: 'PM-100' },
 ]
 
 /** เพิ่มคอลัมน์ที่มาทีหลังให้ DB ที่สร้างไว้ก่อนแล้ว (รันซ้ำได้) */
@@ -59,6 +59,8 @@ const MIGRATIONS = [
   'ALTER TABLE products MODIFY code VARCHAR(10) NULL',
   // แยกประเภทว่าผลิตเองหรือซื้อมาขายต่อ — ของเดิมที่มีอยู่ก่อนถือเป็น "ผลิตเอง" ตาม DEFAULT
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS source_type ENUM('in_house','resale') NOT NULL DEFAULT 'in_house' AFTER model`,
+  // ลูกค้าพิมพ์ชื่อสินค้าเองตอนลงทะเบียนได้แล้ว — แยกว่าผลิตภัณฑ์ไหนลูกค้าเป็นคนเพิ่ม ของเดิมทั้งหมดเป็นของแอดมินตาม DEFAULT
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS added_by ENUM('admin','customer') NOT NULL DEFAULT 'admin' AFTER warranty_end_date`,
 ]
 
 async function main() {
@@ -97,9 +99,8 @@ async function main() {
     // ย้อนชื่อ/แบรนด์/รุ่นที่แอดมินแก้ไว้เองกลับเป็นค่า seed โดยไม่มีใครสังเกต
     for (const p of SEED_PRODUCTS) {
       await conn.execute(
-        `INSERT IGNORE INTO products (name, code, brand, model, warranty_years, warranty_months, warranty_days)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [p.name, p.code, p.brand, p.model, p.years, p.months, p.days]
+        `INSERT IGNORE INTO products (name, code, brand, model) VALUES (?, ?, ?, ?)`,
+        [p.name, p.code, p.brand, p.model]
       )
     }
     console.log(`✓ seed ผลิตภัณฑ์ตัวอย่าง ${SEED_PRODUCTS.length} รายการ (SEED_PRODUCTS=true)`)

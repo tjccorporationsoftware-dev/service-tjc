@@ -3,23 +3,23 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  AlertTriangle,
   ArrowRight,
   Boxes,
+  CalendarPlus,
   CheckCircle2,
+  ClipboardList,
   Clock,
   ListChecks,
   Loader2,
   PackageCheck,
-  ShieldCheck,
   Timer,
 } from 'lucide-react'
 import { Badge, Card, ISSUE_STATUS_TONE, StatCard, formatDateTime } from '@/components/admin/ui'
-import { ISSUE_STATUS_LABEL } from '@/lib/warranty'
+import { ISSUE_STATUS_LABEL } from '@/lib/display'
 
 type Stats = {
   serials: { total: number; available: number; registered: number; void: number }
-  warranty: { total: number; not_started: number; active: number; expiring_soon: number }
+  registrations: { total: number; this_month: number }
   issues: { total: number; pending: number; in_progress: number; resolved: number; closed: number }
   recent_issues: { id: number; status: string; created_at: string; sn: string; product_name: string }[]
 }
@@ -49,7 +49,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-navy-900">ภาพรวมทั้งหมด</h1>
-        <p className="mt-0.5 text-sm text-navy-400">สรุปสถานะ การรับประกัน และคำขอรับบริการ</p>
+        <p className="mt-0.5 text-sm text-navy-400">สรุปการลงทะเบียนสินค้า และคำขอรับบริการ</p>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -62,17 +62,16 @@ export default function DashboardPage() {
           tone="brand"
         />
         <StatCard
-          icon={ShieldCheck}
-          label="อยู่ระหว่างรับประกัน"
-          value={stats.warranty.active}
-          hint={`จากทั้งหมด ${stats.warranty.total.toLocaleString('th-TH')} เครื่อง`}
+          icon={ClipboardList}
+          label="ลูกค้าลงทะเบียนทั้งหมด"
+          value={stats.registrations.total}
           tone="green"
         />
         <StatCard
-          icon={AlertTriangle}
-          label="ใกล้สิ้นสุดการรับประกัน"
-          value={stats.warranty.expiring_soon}
-          tone={stats.warranty.expiring_soon > 0 ? 'amber' : 'slate'}
+          icon={CalendarPlus}
+          label="ลงทะเบียนเดือนนี้"
+          value={stats.registrations.this_month}
+          tone="slate"
         />
       </section>
 

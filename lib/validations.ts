@@ -13,6 +13,8 @@ export const snSchema = z
   .min(5, 'กรุณากรอก Serial Number')
   .max(50, 'Serial Number ยาวเกินไป')
 
+// ลูกค้ากรอกเองทั้งหมด เจ้าหน้าที่ไม่ต้องเตรียมอะไรไว้ก่อน — ทั้งผลิตภัณฑ์และ SN
+// (ดูว่าจับคู่กับข้อมูลเดิมในระบบอย่างไรที่ app/api/register/route.ts)
 export const registerSchema = z.object({
   customer_name: z
     .string()
@@ -21,17 +23,12 @@ export const registerSchema = z.object({
     .max(255),
   phone: phoneSchema,
   email: z.string().trim().min(1, 'กรุณากรอกอีเมล').email('รูปแบบอีเมลไม่ถูกต้อง').max(255),
-  product_id: z.coerce.number().int().positive('กรุณาเลือกผลิตภัณฑ์'),
   sn: snSchema,
-  // วันที่ลูกค้ากรอกเอง (เช่น จำจากใบรับประกันกระดาษ) ไว้เทียบกับวันที่แอดมินกดเริ่มประกันจริง — บังคับกรอกเพื่อให้เช็คได้ทุกครั้ง
-  customer_reported_warranty_start: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณากรอกวันที่เริ่มประกัน'),
-  customer_reported_warranty_end: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณากรอกวันที่สิ้นสุดประกัน'),
+  product_name: z.string().trim().min(1, 'กรุณากรอกชื่อสินค้า').max(255, 'ชื่อสินค้ายาวเกินไป'),
+  product_brand: z.string().trim().max(100, 'ยี่ห้อยาวเกินไป').optional().or(z.literal('')),
+  product_model: z.string().trim().max(100, 'รุ่นยาวเกินไป').optional().or(z.literal('')),
   consent: z.boolean().refine((v) => v === true, {
-    message: 'กรุณายอมรับเงื่อนไขการรับประกันและประกาศความเป็นส่วนตัว',
+    message: 'กรุณายอมรับประกาศความเป็นส่วนตัว',
   }),
 })
 
@@ -121,44 +118,7 @@ export const productSchema = z.object({
   source_type: z
     .enum(['in_house', 'resale'], { error: 'กรุณาเลือกประเภทผลิตภัณฑ์ (ผลิตเอง หรือ ซื้อมาขายต่อ)' })
     .default('in_house'),
-  // ระยะประกันไม่บังคับ — เว้นว่างได้ถ้ายังไม่รู้ หรือกรอกช่วงวันที่ด้านล่างแทน
-  warranty_years: z.coerce.number().int().min(0).max(50, 'ปีต้องไม่เกิน 50').default(0),
-  warranty_months: z.coerce.number().int().min(0).max(600, 'เดือนต้องไม่เกิน 600').default(0),
-  warranty_days: z.coerce.number().int().min(0).max(3650, 'วันต้องไม่เกิน 3,650').default(0),
-  // ช่วงวันประกันแบบตายตัวของตัวผลิตภัณฑ์ (ไม่บังคับ) — ถ้ากรอกครบทั้งคู่
-  // ระบบจะคำนวณระยะประกันจากช่วงนี้แทนค่าที่กรอกในช่อง ปี/เดือน/วัน
-  warranty_start_date: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'รูปแบบวันที่เริ่มประกันไม่ถูกต้อง')
-    .optional()
-    .or(z.literal('')),
-  warranty_end_date: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'รูปแบบวันที่สิ้นสุดประกันไม่ถูกต้อง')
-    .optional()
-    .or(z.literal('')),
   is_active: z.coerce.boolean().optional(),
-})
-  .refine(
-    // เทียบ yyyy-mm-dd เป็นสตริงได้ตรง ๆ เพราะเรียงตามลำดับเวลาอยู่แล้ว
-    (p) => !p.warranty_start_date || !p.warranty_end_date || p.warranty_end_date >= p.warranty_start_date,
-    { message: 'วันที่สิ้นสุดประกันต้องไม่ก่อนวันที่เริ่มประกัน', path: ['warranty_end_date'] }
-  )
-
-export const startWarrantySchema = z.object({
-  // ใช้ serial_numbers.id แทน registration id เพราะบางแถวยังไม่มีลูกค้าลงทะเบียนเลย
-  // (แอดมินเริ่มประกันตรงได้ ระบบจะสร้าง registration เปล่าให้เอง รอลูกค้ามาผูกข้อมูลทีหลัง)
-  serial_number_ids: z
-    .array(z.coerce.number().int().positive())
-    .min(1, 'กรุณาเลือกอย่างน้อย 1 รายการ')
-    .max(500, 'เลือกได้สูงสุด 500 รายการต่อครั้ง'),
-  // ไม่ระบุ = เริ่มวันนี้
-  start_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'รูปแบบวันที่ไม่ถูกต้อง')
-    .optional(),
 })
 
 export const issueUpdateSchema = z.object({

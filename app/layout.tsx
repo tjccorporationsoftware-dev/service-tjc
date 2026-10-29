@@ -16,8 +16,8 @@ const prompt = Prompt({
 })
 
 export const metadata: Metadata = {
-  title: 'ระบบลงทะเบียนรับประกันสินค้า',
-  description: 'ลงทะเบียนรับประกัน แจ้งปัญหาตัวเครื่อง และตรวจสอบสถานะเคส',
+  title: 'ระบบลงทะเบียนสินค้า',
+  description: 'ลงทะเบียนสินค้า แจ้งปัญหาตัวเครื่อง และตรวจสอบสถานะเคส',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

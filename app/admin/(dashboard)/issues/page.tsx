@@ -12,10 +12,9 @@ import {
   Pagination,
   Select,
   Textarea,
-  formatDate,
   formatDateTime,
 } from '@/components/admin/ui'
-import { ISSUE_STATUS_LABEL } from '@/lib/warranty'
+import { ISSUE_STATUS_LABEL } from '@/lib/display'
 import { useApiList } from '@/lib/use-api-list'
 
 type Attachment = { type: string; url: string }
@@ -25,14 +24,12 @@ type Issue = {
   case_number: string
   description: string
   status: string
-  in_warranty: boolean
   admin_note: string | null
   created_at: string
   updated_at: string
   sn: string
   phone: string
   customer_name: string | null
-  warranty_end: string
   product_name: string
   attachments: Attachment[]
 }
@@ -149,14 +146,12 @@ export default function IssuesPage() {
                   <Badge tone={ISSUE_STATUS_TONE[issue.status]}>
                     {ISSUE_STATUS_LABEL[issue.status]}
                   </Badge>
-                  {!issue.in_warranty && <Badge tone="amber">นอกประกัน</Badge>}
                 </div>
                 <p className="mt-1.5 text-sm text-navy-500">
                   <span className="font-mono">{issue.sn}</span> · {issue.product_name}
                 </p>
                 <p className="text-sm text-navy-500">
-                  {issue.customer_name || 'ไม่ระบุชื่อ'} · <span className="tabular">{issue.phone}</span> ·
-                  ประกันถึง {formatDate(issue.warranty_end)}
+                  {issue.customer_name || 'ไม่ระบุชื่อ'} · <span className="tabular">{issue.phone}</span>
                 </p>
               </div>
               <div className="text-right text-xs text-navy-300">

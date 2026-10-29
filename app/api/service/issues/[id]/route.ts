@@ -12,14 +12,11 @@ type DetailRow = {
   id: number
   description: string
   status: string
-  in_warranty: number
   admin_note: string | null
   created_at: string
   customer_name: string | null
   phone: string | null
   email: string | null
-  warranty_start: string | null
-  warranty_end: string | null
   sn: string
   product_name: string | null
   brand: string | null
@@ -36,8 +33,8 @@ type AttachmentRow = {
 
 async function loadIssue(id: number) {
   return queryOne<DetailRow>(
-    `SELECT ir.id, ir.description, ir.status, ir.in_warranty, ir.admin_note, ir.created_at,
-            r.customer_name, r.phone, r.email, r.warranty_start, r.warranty_end,
+    `SELECT ir.id, ir.description, ir.status, ir.admin_note, ir.created_at,
+            r.customer_name, r.phone, r.email,
             s.sn,
             p.name AS product_name, p.brand, p.model
      FROM issue_reports ir

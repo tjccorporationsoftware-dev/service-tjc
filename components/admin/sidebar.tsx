@@ -23,11 +23,15 @@ const LINKS = [
   { href: '/admin/registrations', label: 'การลงทะเบียน', icon: ClipboardList },
   { href: '/admin/products', label: 'ผลิตภัณฑ์', icon: Package },
   { href: '/admin/sn-setup', label: 'ตั้งค่ารหัส SN', icon: ListOrdered },
-  { href: '/admin/serial-numbers', label: 'SN', icon: QrCode },
+  // label สั้นจนเดาไม่ออกว่าหน้านี้ทำอะไรได้บ้าง จึงมีบรรทัดอธิบายเพิ่ม (เมนูอื่นชื่อบอกอยู่แล้ว)
+  { href: '/admin/serial-numbers', label: 'SN', hint: 'สร้าง · ผูกสินค้า', icon: QrCode },
   { href: '/admin/issues', label: 'คำขอรับบริการ', icon: MessageSquareWarning },
   { href: '/admin/qrcode', label: 'สร้าง QR', icon: ScanLine },
   { href: '/admin/manual', label: 'คู่มือ', icon: BookOpen },
 ]
+
+// หน้าที่ตารางมีหลายคอลัมน์ ให้ใช้เต็มความกว้างจอ แทนเพดาน max-w-6xl ของหน้าอื่น
+const FULL_WIDTH_PAGES = ['/admin/serial-numbers']
 
 type Session = { username: string; displayName: string | null; role: 'admin' | 'staff' }
 
@@ -75,7 +79,7 @@ export function AdminShell({ session, children }: { session: Session; children: 
               <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
             </div>
             <div>
-              <p className="text-xs text-navy-400">TJC CARE</p>
+              <p className="text-xs text-navy-400">TJC SERVICE</p>
             </div>
           </div>
           <button
@@ -109,7 +113,18 @@ export function AdminShell({ session, children }: { session: Session; children: 
                   }`}
                   strokeWidth={2}
                 />
-                {link.label}
+                {link.hint ? (
+                  <span className="min-w-0">
+                    <span className="block">{link.label}</span>
+                    <span
+                      className={`block text-xs font-normal ${active ? 'text-brand-600' : 'text-navy-400'}`}
+                    >
+                      {link.hint}
+                    </span>
+                  </span>
+                ) : (
+                  link.label
+                )}
               </Link>
             )
           })}
@@ -133,7 +148,9 @@ export function AdminShell({ session, children }: { session: Session; children: 
 
       <div className="flex min-h-screen flex-col pt-14 md:pt-0 md:pl-64">
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className={`mx-auto ${FULL_WIDTH_PAGES.includes(pathname) ? '' : 'max-w-6xl'}`}>
+            {children}
+          </div>
         </main>
       </div>
     </div>
