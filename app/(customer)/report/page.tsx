@@ -33,6 +33,7 @@ import {
   TipCard,
   TipList,
 } from '@/components/ui'
+import { ErrorDialog } from '@/components/error-dialog'
 import { readPrefill } from '@/lib/customer-link'
 import { SITE } from '@/lib/site-content'
 import { UPLOAD_LIMITS } from '@/lib/validations'
@@ -127,6 +128,8 @@ function ReportForm() {
   const [snInfo, setSnInfo] = useState<SnInfo | null>(null)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState('')
+  // ข้อความในหน้าต่างแจ้งเตือนกลางจอ (ErrorDialog) — ว่าง = ปิด
+  const [popup, setPopup] = useState('')
   // ข้อผิดพลาดตอนเลือกไฟล์ แสดงในส่วนไฟล์แนบ — ลูกค้ากำลังมองตรงนั้น ไม่ใช่บนสุดของฟอร์ม
   const [fileError, setFileError] = useState('')
   const [success, setSuccess] = useState<Success | null>(null)
@@ -228,6 +231,12 @@ function ReportForm() {
     }
   }
 
+  /** กดส่งไม่สำเร็จ — ขึ้นทั้ง Alert ในฟอร์ม และหน้าต่างกลางจอ (ลูกค้าอยู่ที่ปุ่มส่งท้ายฟอร์ม อาจไม่ได้เลื่อนขึ้นไปดู) */
+  function fail(message: string) {
+    setError(message)
+    setPopup(message)
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError('')
@@ -247,16 +256,17 @@ function ReportForm() {
       // ขึ้นในส่วนไฟล์แนบ ซึ่งอยู่เหนือปุ่มส่งพอดี
       if (res.status === 413) {
         setFileError(TOTAL_TOO_BIG)
+        setPopup(TOTAL_TOO_BIG)
         return
       }
       const data = await res.json().catch(() => null)
       if (!res.ok || !data) {
-        setError(data?.error ?? 'แจ้งปัญหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+        fail(data?.error ?? 'แจ้งปัญหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
         return
       }
       setSuccess(data.issue)
     } catch {
-      setError('ส่งข้อมูลไม่สำเร็จ — ไฟล์อาจมีขนาดใหญ่เกินไป')
+      fail('ส่งข้อมูลไม่สำเร็จ — ไฟล์อาจมีขนาดใหญ่เกินไป หรือการเชื่อมต่อขาดระหว่างส่ง')
     } finally {
       setSubmitting(false)
     }
@@ -307,6 +317,8 @@ function ReportForm() {
 
   return (
     <>
+      <ErrorDialog message={popup} title="ส่งคำขอไม่สำเร็จ" onClose={() => setPopup('')} />
+
       <PageHero
         icon={Wrench}
         title="แจ้งปัญหาการใช้งาน"

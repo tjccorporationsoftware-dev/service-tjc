@@ -28,6 +28,7 @@ import {
   formatDate,
   formatDateTime,
 } from '@/components/ui'
+import { ErrorDialog } from '@/components/error-dialog'
 import { readPrefill } from '@/lib/customer-link'
 import { ISSUE_STATUS_LABEL } from '@/lib/display'
 import { SITE } from '@/lib/site-content'
@@ -77,7 +78,15 @@ function StatusForm() {
   const [form, setForm] = useState(() => ({ sn: readPrefill(searchParams).sn, phone: '' }))
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
+  // ข้อความในหน้าต่างแจ้งเตือนกลางจอ (ErrorDialog) — ว่าง = ปิด
+  const [popup, setPopup] = useState('')
   const [loading, setLoading] = useState(false)
+
+  /** กดส่งไม่สำเร็จ — ขึ้นทั้ง Alert ในฟอร์ม และหน้าต่างกลางจอ (ลูกค้าอยู่ที่ปุ่มส่งท้ายฟอร์ม อาจไม่ได้เลื่อนขึ้นไปดู) */
+  function fail(message: string) {
+    setError(message)
+    setPopup(message)
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -89,12 +98,12 @@ function StatusForm() {
       const res = await fetch(`/api/issues/status?${params}`)
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? 'ค้นหาไม่สำเร็จ')
+        fail(data.error ?? 'ค้นหาไม่สำเร็จ')
         return
       }
       setResult(data)
     } catch {
-      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')
+      fail('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)
     }
@@ -102,6 +111,8 @@ function StatusForm() {
 
   return (
     <>
+      <ErrorDialog message={popup} title="ค้นหาไม่สำเร็จ" onClose={() => setPopup('')} />
+
       <PageHero
         icon={Search}
         title="ตรวจสอบสถานะ"

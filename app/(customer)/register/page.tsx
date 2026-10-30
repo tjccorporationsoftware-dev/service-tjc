@@ -31,6 +31,7 @@ import {
   TipCard,
   TipList,
 } from '@/components/ui'
+import { ErrorDialog } from '@/components/error-dialog'
 import { readPrefill } from '@/lib/customer-link'
 import { SITE } from '@/lib/site-content'
 import { registerSchema, firstIssueMessage } from '@/lib/validations'
@@ -99,6 +100,8 @@ function RegisterForm() {
   const [knownSerial, setKnownSerial] = useState<KnownSerial | null>(null)
   const [checkingSn, setCheckingSn] = useState(false)
   const [error, setError] = useState('')
+  // ข้อความในหน้าต่างแจ้งเตือนกลางจอ (ErrorDialog) — ว่าง = ปิด
+  const [popup, setPopup] = useState('')
   const [success, setSuccess] = useState<Success | null>(null)
   const [submitting, setSubmitting] = useState(false)
   // SN ล่าสุดที่สั่งค้น — ผลของ SN เก่าที่ตอบกลับมาช้ากว่าต้องทิ้ง
@@ -173,6 +176,12 @@ function RegisterForm() {
     }))
   }
 
+  /** กดส่งไม่สำเร็จ — ขึ้นทั้ง Alert ในฟอร์ม และหน้าต่างกลางจอ (ลูกค้าอยู่ที่ปุ่มส่งท้ายฟอร์ม อาจไม่ได้เลื่อนขึ้นไปดู) */
+  function fail(message: string) {
+    setError(message)
+    setPopup(message)
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     // SN ที่ผูกผลิตภัณฑ์ไว้แล้ว ส่งผลิตภัณฑ์ตามระบบไป (API ยึดตามระบบอยู่แล้ว แต่ต้องผ่าน validation)
@@ -186,7 +195,7 @@ function RegisterForm() {
       : form
     const parsed = registerSchema.safeParse(payload)
     if (!parsed.success) {
-      setError(firstIssueMessage(parsed.error))
+      fail(firstIssueMessage(parsed.error))
       return
     }
     setError('')
@@ -199,12 +208,12 @@ function RegisterForm() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? 'ลงทะเบียนไม่สำเร็จ')
+        fail(data.error ?? 'ลงทะเบียนไม่สำเร็จ')
         return
       }
       setSuccess(data.registration)
     } catch {
-      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')
+      fail('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
       setSubmitting(false)
     }
@@ -270,6 +279,8 @@ function RegisterForm() {
 
   return (
     <>
+      <ErrorDialog message={popup} title="ลงทะเบียนไม่สำเร็จ" onClose={() => setPopup('')} />
+
       <PageHero
         icon={FileSignature}
         title="ลงทะเบียนผลิตภัณฑ์"
