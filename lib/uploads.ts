@@ -17,6 +17,9 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'image/heif': 'heic', // เก็บเป็น .heic ตัวเดียว — สองชนิดนี้คือรูปแบบเดียวกัน ต่างแค่ชื่อที่ระบบส่งมา
   'image/webp': 'webp',
   'video/mp4': 'mp4',
+  'video/quicktime': 'mov', // วิดีโอจาก iPhone
+  'video/3gpp': '3gp',
+  'video/webm': 'webm',
 }
 
 /**
@@ -32,6 +35,9 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   heif: 'image/heif',
   webp: 'image/webp',
   mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  '3gp': 'video/3gpp',
+  webm: 'video/webm',
 }
 
 /** ชนิดไฟล์ที่แท้จริง — เชื่อ file.type ก่อน ถ้าไม่บอกมาค่อยเดาจากนามสกุล */
@@ -106,4 +112,7 @@ export const CONTENT_TYPE_BY_EXT: Record<string, string> = {
   heic: 'image/heic',
   webp: 'image/webp',
   mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  '3gp': 'video/3gpp',
+  webm: 'video/webm',
 }

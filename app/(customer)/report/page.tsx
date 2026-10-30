@@ -43,6 +43,51 @@ import { UPLOAD_LIMITS } from '@/lib/validations'
  */
 const IMAGE_ACCEPT =
   'image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic,.heif,.webp'
+// .mov = คลิปจาก iPhone · .3gp/.webm = Android บางรุ่น/บางแอป — ต้องตรงกับ UPLOAD_LIMITS.video.mimeTypes
+const VIDEO_ACCEPT = 'video/mp4,video/quicktime,video/3gpp,video/webm,.mp4,.mov,.3gp,.webm'
+
+const toMB = (bytes: number) => bytes / 1024 / 1024
+const sizeOf = (files: File[]) => files.reduce((sum, f) => sum + f.size, 0)
+/** เตือนเมื่อรูป + วิดีโอรวมกันเกิน UPLOAD_LIMITS.totalMaxSize (Cloudflare ตัดคำขอเกิน 100MB) */
+const TOTAL_TOO_BIG = `ไฟล์แนบใหญ่เกินกำหนด — ${UPLOAD_LIMITS.totalLabel} กรุณาลดจำนวนรูปหรือใช้คลิปที่สั้นลง`
+/** ใช้ถึงสัดส่วนนี้ของเพดานรวมแล้วเตือนว่าใกล้เต็ม (ส่วนที่เกินถูกกันไว้ตั้งแต่ตอนเลือกไฟล์) */
+const NEAR_FULL_RATIO = 0.8
+
+/** แถบพื้นที่ไฟล์แนบที่ใช้ไป — ปกติสีแบรนด์ ใกล้เต็มเปลี่ยนเป็นสีเหลืองพร้อมบอกว่าเหลืออีกเท่าไร */
+function AttachmentUsage({ bytes }: { bytes: number }) {
+  const limitMB = toMB(UPLOAD_LIMITS.totalMaxSize)
+  const usedMB = toMB(bytes)
+  const nearFull = bytes >= UPLOAD_LIMITS.totalMaxSize * NEAR_FULL_RATIO
+  const percent = Math.min(100, (bytes / UPLOAD_LIMITS.totalMaxSize) * 100)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className={nearFull ? 'font-medium text-amber-700' : 'text-navy-400'}>
+          {nearFull
+            ? `ใกล้เต็มแล้ว — เหลืออีก ${Math.max(0, limitMB - usedMB).toFixed(1)} MB`
+            : 'พื้นที่ไฟล์แนบที่ใช้ไป'}
+        </span>
+        <span className="tabular shrink-0 text-navy-500">
+          {usedMB.toFixed(1)} / {Math.round(limitMB)} MB
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="พื้นที่ไฟล์แนบที่ใช้ไป"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(percent)}
+        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy-100"
+      >
+        <div
+          className={`h-full rounded-full transition-[width] duration-300 ${nearFull ? 'bg-amber-500' : 'bg-brand-500'}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  )
+}
 
 /** ช่องคลิก/ลากไฟล์มาวาง ใช้ทั้งรูปและวิดีโอ */
 const DROPZONE =
@@ -82,6 +127,8 @@ function ReportForm() {
   const [snInfo, setSnInfo] = useState<SnInfo | null>(null)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState('')
+  // ข้อผิดพลาดตอนเลือกไฟล์ แสดงในส่วนไฟล์แนบ — ลูกค้ากำลังมองตรงนั้น ไม่ใช่บนสุดของฟอร์ม
+  const [fileError, setFileError] = useState('')
   const [success, setSuccess] = useState<Success | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -136,37 +183,40 @@ function ReportForm() {
     if (incoming.length === 0) return
     const combined = [...images, ...incoming]
     if (combined.length > UPLOAD_LIMITS.image.maxCount) {
-      setError(UPLOAD_LIMITS.image.label)
+      setFileError(UPLOAD_LIMITS.image.label)
       return
     }
     const tooBig = incoming.find((f) => f.size > UPLOAD_LIMITS.image.maxSize)
     if (tooBig) {
       const mb = Math.round(UPLOAD_LIMITS.image.maxSize / 1024 / 1024)
-      setError(`รูป "${tooBig.name}" ใหญ่เกิน ${mb}MB`)
+      setFileError(`รูป "${tooBig.name}" ใหญ่เกิน ${mb}MB`)
       return
     }
-    // เตือนตั้งแต่ก่อนส่ง ดีกว่าให้อัปโหลดไปจนครบแล้วค่อยโดนเซิร์ฟเวอร์ปฏิเสธ
-    const combinedSize = combined.reduce((sum, f) => sum + f.size, 0)
-    if (combinedSize > UPLOAD_LIMITS.totalMaxSize) {
-      const mb = Math.round(UPLOAD_LIMITS.totalMaxSize / 1024 / 1024)
-      setError(`รูปทั้งหมดรวมกันใหญ่เกิน ${mb}MB — กรุณาแบ่งแจ้งเป็นหลายครั้ง`)
+    // เตือนตั้งแต่ก่อนส่ง (นับวิดีโอที่เลือกไว้ด้วย) ดีกว่าให้อัปโหลดไปจนครบแล้วค่อยโดนปฏิเสธ
+    if (sizeOf(combined) + (video?.size ?? 0) > UPLOAD_LIMITS.totalMaxSize) {
+      setFileError(TOTAL_TOO_BIG)
       return
     }
-    setError('')
+    setFileError('')
     setImages(combined)
   }
 
   function removeImage(index: number) {
     setImages(images.filter((_, i) => i !== index))
+    setFileError('')
   }
 
   function setSingleVideo(fileList: FileList | null) {
     const file = fileList?.[0] ?? null
     if (file && file.size > UPLOAD_LIMITS.video.maxSize) {
-      setError(`วิดีโอ "${file.name}" ใหญ่เกิน 50MB`)
+      setFileError(`วิดีโอ "${file.name}" ใหญ่เกิน ${Math.round(toMB(UPLOAD_LIMITS.video.maxSize))}MB`)
       return
     }
-    setError('')
+    if (file && sizeOf(images) + file.size > UPLOAD_LIMITS.totalMaxSize) {
+      setFileError(TOTAL_TOO_BIG)
+      return
+    }
+    setFileError('')
     setVideo(file)
   }
 
@@ -181,6 +231,7 @@ function ReportForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError('')
+    setFileError('')
     setSubmitting(true)
 
     const body = new FormData()
@@ -192,9 +243,15 @@ function ReportForm() {
 
     try {
       const res = await fetch('/api/issues', { method: 'POST', body })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'แจ้งปัญหาไม่สำเร็จ')
+      // Cloudflare ตอบ 413 เป็นหน้า HTML (อ่านเป็น JSON ไม่ได้) เมื่อคำขอใหญ่เกิน 100MB
+      // ขึ้นในส่วนไฟล์แนบ ซึ่งอยู่เหนือปุ่มส่งพอดี
+      if (res.status === 413) {
+        setFileError(TOTAL_TOO_BIG)
+        return
+      }
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data) {
+        setError(data?.error ?? 'แจ้งปัญหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
         return
       }
       setSuccess(data.issue)
@@ -389,7 +446,7 @@ function ReportForm() {
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept="video/mp4"
+                  accept={VIDEO_ACCEPT}
                   onChange={(e) => {
                     setSingleVideo(e.target.files)
                     e.target.value = ''
@@ -418,7 +475,10 @@ function ReportForm() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setVideo(null)}
+                      onClick={() => {
+                        setVideo(null)
+                        setFileError('')
+                      }}
                       aria-label="ลบวิดีโอนี้"
                       className="shrink-0 rounded-lg p-1.5 text-navy-400 transition hover:bg-rose-50 hover:text-rose-600"
                     >
@@ -427,6 +487,10 @@ function ReportForm() {
                   </div>
                 )}
               </Field>
+
+              {fileError && <Alert tone="error">{fileError}</Alert>}
+
+              {(images.length > 0 || video) && <AttachmentUsage bytes={sizeOf(images) + (video?.size ?? 0)} />}
             </FormSection>
 
             <Button
@@ -456,7 +520,7 @@ function ReportForm() {
             <TipList items={SITE.reportTips} />
           </TipCard>
           <TipCard icon={Paperclip} title="ไฟล์ที่แนบได้">
-            <TipList items={[UPLOAD_LIMITS.image.label, UPLOAD_LIMITS.video.label]} />
+            <TipList items={[UPLOAD_LIMITS.image.label, UPLOAD_LIMITS.video.label, UPLOAD_LIMITS.totalLabel]} />
           </TipCard>
         </aside>
       </PageBody>

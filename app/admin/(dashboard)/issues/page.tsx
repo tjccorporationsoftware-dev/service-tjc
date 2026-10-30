@@ -177,12 +177,22 @@ export default function IssuesPage() {
                       />
                     </a>
                   ) : (
-                    <video
-                      key={file.url}
-                      src={file.url}
-                      controls
-                      className="h-24 rounded-xl border border-navy-100 shadow-soft"
-                    />
+                    // คลิป .mov จาก iPhone บางไฟล์เป็น HEVC ซึ่ง Chrome บางเครื่องเล่นในหน้าไม่ได้ — มีลิงก์ให้เปิด/โหลดไฟล์เสมอ
+                    <div key={file.url} className="flex flex-col items-start gap-1">
+                      <video
+                        src={file.url}
+                        controls
+                        className="h-24 rounded-xl border border-navy-100 shadow-soft"
+                      />
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-navy-500 underline-offset-2 hover:text-brand-600 hover:underline"
+                      >
+                        เปิด/ดาวน์โหลดวิดีโอ
+                      </a>
+                    </div>
                   )
                 )}
               </div>

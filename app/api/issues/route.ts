@@ -38,13 +38,12 @@ export async function POST(request: Request) {
     return Response.json({ error: UPLOAD_LIMITS.video.label }, { status: 400 })
   }
 
-  // ตาข่ายกันเซิร์ฟเวอร์ล่ม — saveUpload() อ่านไฟล์เข้าหน่วยความจำทั้งก้อน
-  // ผู้ใช้จริงไม่มีทางชนเพดานนี้ แต่คำขอที่จงใจแนบไฟล์ใหญ่หลายสิบไฟล์จะถูกตัดตั้งแต่ก่อนเริ่มเขียนดิสก์
+  // เพดานรวมให้ต่ำกว่าที่ Cloudflare รับได้ (ดู UPLOAD_LIMITS.totalMaxSize) — หน้าเว็บกันไว้แล้ว ตรงนี้กันคำขอที่ยิงตรงมา
+  // และตัดตั้งแต่ก่อนเริ่มเขียนดิสก์ เพราะ saveUpload() อ่านไฟล์เข้าหน่วยความจำทั้งก้อน
   const totalSize = [...images, ...videos].reduce((sum, f) => sum + f.size, 0)
   if (totalSize > UPLOAD_LIMITS.totalMaxSize) {
-    const mb = Math.round(UPLOAD_LIMITS.totalMaxSize / 1024 / 1024)
     return Response.json(
-      { error: `ไฟล์แนบรวมกันใหญ่เกิน ${mb}MB — กรุณาแบ่งแจ้งเป็นหลายครั้ง` },
+      { error: `ไฟล์แนบใหญ่เกินกำหนด — ${UPLOAD_LIMITS.totalLabel} กรุณาลดจำนวนรูปหรือใช้คลิปที่สั้นลง` },
       { status: 400 }
     )
   }
