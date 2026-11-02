@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Activity, ArrowRight, Check, CheckCircle2, FileSignature, ImagePlus, Search, ShieldCheck, Wrench } from 'lucide-react'
+import { Activity, ArrowRight, Check, CheckCircle2, ImagePlus, Search, ShieldCheck, Wrench } from 'lucide-react'
 import { CrossPattern, EcgLine } from '@/components/decor'
 import { SITE } from '@/lib/site-content'
 import { TIMELINE, TRUST, delay } from './shared'
@@ -63,14 +63,14 @@ export function ClinicalHero() {
             className="mt-10 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start motion-safe:animate-rise"
             style={delay(560)}
           >
-            <Link href="/register" className={CTA_PRIMARY}>
-              <FileSignature className="h-5 w-5" />
-              ลงทะเบียนสินค้า
-              <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
-            </Link>
-            <Link href="/report" className={CTA_SECONDARY}>
+            <Link href="/report" className={CTA_PRIMARY}>
               <Wrench className="h-5 w-5" />
               แจ้งปัญหา
+              <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
+            </Link>
+            <Link href="/status" className={CTA_SECONDARY}>
+              <Search className="h-5 w-5" />
+              เช็คสถานะ
             </Link>
           </div>
 
@@ -107,13 +107,13 @@ export function ClinicalClosing() {
               พร้อมเริ่มต้น<span className="text-brand-600">แล้วหรือยัง?</span>
             </h2>
             <p className="mt-4 leading-relaxed text-navy-500 sm:text-lg">
-              ลงทะเบียนสินค้าของคุณวันนี้ เพื่อรับบริการหลังการขายได้รวดเร็วยิ่งขึ้นเมื่อต้องการ
+              สินค้ามีปัญหา? แจ้งพร้อมแนบรูปหรือวิดีโอได้ทันที ทีมงานรับเรื่องและอัปเดตสถานะให้ติดตามได้ตลอด
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-3 sm:flex-row lg:flex-col">
-            <Link href="/register" className={CTA_PRIMARY}>
-              <FileSignature className="h-5 w-5" />
-              ลงทะเบียนสินค้า
+            <Link href="/report" className={CTA_PRIMARY}>
+              <Wrench className="h-5 w-5" />
+              แจ้งปัญหา
               <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
             </Link>
             <Link href="/status" className={CTA_SECONDARY}>
@@ -210,8 +210,8 @@ function ClinicalShowcase() {
         <div className="flex items-center gap-3 rounded-lg border-l-4 border-emerald-500 bg-white px-4 py-3 shadow-soft-lg motion-safe:animate-float">
           <CheckCircle2 className="h-5 w-5 text-emerald-600" />
           <div>
-            <p className="text-sm font-semibold text-navy-900">ลงทะเบียนสำเร็จ</p>
-            <p className="text-xs text-navy-400">แจ้งปัญหาได้ทันที</p>
+            <p className="text-sm font-semibold text-navy-900">ส่งเรื่องสำเร็จ</p>
+            <p className="text-xs text-navy-400">ได้เลขที่เคสทันที</p>
           </div>
         </div>
       </div>

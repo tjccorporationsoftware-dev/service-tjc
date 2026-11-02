@@ -61,6 +61,49 @@ const MIGRATIONS = [
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS source_type ENUM('in_house','resale') NOT NULL DEFAULT 'in_house' AFTER model`,
   // ลูกค้าพิมพ์ชื่อสินค้าเองตอนลงทะเบียนได้แล้ว — แยกว่าผลิตภัณฑ์ไหนลูกค้าเป็นคนเพิ่ม ของเดิมทั้งหมดเป็นของแอดมินตาม DEFAULT
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS added_by ENUM('admin','customer') NOT NULL DEFAULT 'admin' AFTER warranty_end_date`,
+  // พ.ย. 2026 — แจ้งปัญหาตามหน่วยงาน/โครงการ ได้หลายสินค้าต่อเคส SN ไม่บังคับ: เคสไม่ผูกกับ registration แล้ว
+  // ผู้แจ้ง/หน่วยงาน/โครงการเก็บในเคสเอง ส่วนสินค้าอยู่ที่ issue_items (ตารางใหม่ — สร้างจาก schema.sql)
+  'ALTER TABLE issue_reports MODIFY registration_id INT NULL',
+  `ALTER TABLE issue_reports
+     ADD COLUMN IF NOT EXISTS reporter_name VARCHAR(255) AFTER registration_id,
+     ADD COLUMN IF NOT EXISTS reporter_phone VARCHAR(15) AFTER reporter_name,
+     ADD COLUMN IF NOT EXISTS reporter_email VARCHAR(255) AFTER reporter_phone,
+     ADD COLUMN IF NOT EXISTS org_customer_id INT NULL AFTER reporter_email,
+     ADD COLUMN IF NOT EXISTS org_name VARCHAR(255) AFTER org_customer_id,
+     ADD COLUMN IF NOT EXISTS org_province VARCHAR(100) AFTER org_name,
+     ADD COLUMN IF NOT EXISTS project_ref_id INT NULL AFTER org_province,
+     ADD COLUMN IF NOT EXISTS project_name VARCHAR(255) AFTER project_ref_id,
+     ADD COLUMN IF NOT EXISTS project_code VARCHAR(50) AFTER project_name,
+     ADD COLUMN IF NOT EXISTS contract_no VARCHAR(100) AFTER project_code,
+     ADD INDEX IF NOT EXISTS idx_reporter_phone (reporter_phone)`,
+  // เคสยุคก่อน: คัดลอกผู้แจ้งจาก registration และสินค้า (SN + ผลิตภัณฑ์) มาเป็น issue_items 1 รายการ
+  // ให้หน้าเช็คสถานะ / หลังบ้าน / API ระบบงาน อ่านเคสเก่าและใหม่จากที่เดียวกัน — มี WHERE กันทำซ้ำ รันกี่รอบก็ได้ผลเท่าเดิม
+  `UPDATE issue_reports ir
+     JOIN registrations r ON r.id = ir.registration_id
+   SET ir.reporter_name = r.customer_name, ir.reporter_phone = r.phone, ir.reporter_email = r.email
+   WHERE ir.reporter_phone IS NULL AND ir.reporter_name IS NULL`,
+  `INSERT INTO issue_items (issue_report_id, product_name, model, sn, created_at)
+   SELECT ir.id, COALESCE(p.name, 'ไม่ระบุสินค้า'), NULLIF(TRIM(CONCAT_WS(' ', p.brand, p.model)), ''), s.sn, ir.created_at
+   FROM issue_reports ir
+   JOIN registrations r ON r.id = ir.registration_id
+   JOIN serial_numbers s ON s.id = r.serial_number_id
+   LEFT JOIN products p ON p.id = s.product_id
+   WHERE NOT EXISTS (SELECT 1 FROM issue_items ii WHERE ii.issue_report_id = ir.id)`,
+  // วันรับประกันของโครงการที่ลูกค้าเลือก (จาก projects ของระบบงาน) เก็บไว้กับเคส ณ ตอนแจ้ง
+  `ALTER TABLE issue_reports
+     ADD COLUMN IF NOT EXISTS project_warranty_start DATE AFTER contract_no,
+     ADD COLUMN IF NOT EXISTS project_warranty_end DATE AFTER project_warranty_start`,
+  // ไฟล์แนบแยกตามรายการสินค้า (ตรงกับใบงานของระบบงาน) — NULL = ไฟล์ระดับเคส
+  `ALTER TABLE issue_attachments
+     ADD COLUMN IF NOT EXISTS issue_item_id INT NULL AFTER issue_report_id,
+     ADD INDEX IF NOT EXISTS idx_issue_item (issue_item_id)`,
+  // เคสที่มีสินค้ารายการเดียว (รวมเคสยุคก่อนทั้งหมด) ไฟล์ทุกไฟล์เป็นของรายการนั้นแน่นอน — ผูกให้เลย
+  // เคสหลายรายการที่แจ้งก่อนแยกไฟล์ปล่อยเป็นระดับเคส (บอกไม่ได้ว่าไฟล์ไหนของรายการไหน) · มี WHERE กันทำซ้ำ
+  `UPDATE issue_attachments ia
+     JOIN (SELECT issue_report_id, MIN(id) AS item_id FROM issue_items GROUP BY issue_report_id HAVING COUNT(*) = 1) one
+       ON one.issue_report_id = ia.issue_report_id
+   SET ia.issue_item_id = one.item_id
+   WHERE ia.issue_item_id IS NULL`,
 ]
 
 async function main() {
@@ -109,15 +152,24 @@ async function main() {
   }
 
   const username = process.env.SEED_ADMIN_USERNAME || 'admin'
-  const password = process.env.SEED_ADMIN_PASSWORD || 'admin1234'
   const [existing] = await conn.execute('SELECT id FROM admins WHERE username = ?', [username])
   if (existing.length === 0) {
+    // ไม่มีรหัสผ่านค่าเริ่มต้น — หลังบ้านเปิดจากอินเทอร์เน็ต บัญชีที่เดาได้คือประตูหลัง
+    // ต้องตั้ง SEED_ADMIN_PASSWORD ยาวอย่างน้อย 12 ตัว และไม่ใช่ค่าที่เคยเป็นค่าเริ่มต้นของสคริปต์รุ่นก่อน
+    const password = process.env.SEED_ADMIN_PASSWORD || ''
+    if (password.length < 12 || /^(admin|password|1234)/i.test(password)) {
+      throw new Error(
+        'SEED_ADMIN_PASSWORD ต้องยาวอย่างน้อย 12 ตัวอักษร และไม่ขึ้นต้นด้วย admin/password/1234 ' +
+          '— ตั้งใน .env.local ให้ต่างกันทุกชุด deploy แล้วรันใหม่'
+      )
+    }
     const hash = await bcrypt.hash(password, 10)
     await conn.execute(
       `INSERT INTO admins (username, password_hash, display_name, role) VALUES (?, ?, ?, 'admin')`,
       [username, hash, 'ผู้ดูแลระบบ']
     )
-    console.log(`✓ สร้างแอดมิน "${username}" (รหัสผ่าน: ${password}) — กรุณาเปลี่ยนรหัสผ่าน`)
+    // ไม่พิมพ์รหัสผ่านออก console — มันอยู่ใน .env.local อยู่แล้ว และ log ของ deploy มักถูกเก็บ/ส่งต่อ
+    console.log(`✓ สร้างแอดมิน "${username}" ด้วยรหัสผ่านจาก SEED_ADMIN_PASSWORD`)
   } else {
     console.log(`- แอดมิน "${username}" มีอยู่แล้ว ข้ามการสร้าง`)
   }

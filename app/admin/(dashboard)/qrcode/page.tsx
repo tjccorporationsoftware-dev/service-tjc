@@ -19,24 +19,17 @@ import { SITE } from '@/lib/site-content'
 
 /**
  * prefill = ช่องที่กรอกไว้ให้ลูกค้าในลิงก์ได้ (lib/customer-link.ts) · intro/subject = ข้อความตั้งต้นตอนส่งลิงก์ให้ลูกค้า
- * หน้าแจ้งปัญหา / เช็คสถานะ ลูกค้ายังต้องกรอกเบอร์โทรเอง — ห้ามใส่เบอร์ลงลิงก์ (PDPA)
+ * ไม่มีหน้าลงทะเบียนแยกแล้ว — ลิงก์แจ้งปัญหากรอก SN / สินค้าไว้ให้ได้ (QR /register เก่ายังส่งต่อมาหน้าแจ้งปัญหา)
+ * ลูกค้ากรอกชื่อ เบอร์โทร และอีเมลเองเสมอ — ห้ามใส่ข้อมูลส่วนตัวลงลิงก์ (PDPA)
  */
 const DESTINATIONS = [
   {
-    value: 'register',
-    label: 'ลงทะเบียนผลิตภัณฑ์',
-    path: '/register',
-    prefill: 'product',
-    subject: 'ลิงก์ลงทะเบียนสินค้า',
-    intro: 'กรุณาลงทะเบียนสินค้าผ่านลิงก์ด้านล่าง เพื่อรับบริการหลังการขาย และแจ้งปัญหาได้ทันทีเมื่อต้องการ',
-  },
-  {
     value: 'report',
-    label: 'แจ้งปัญหาการใช้งาน',
+    label: 'แจ้งปัญหา',
     path: '/report',
-    prefill: 'sn',
-    subject: 'ลิงก์แจ้งปัญหาการใช้งาน',
-    intro: 'หากสินค้ามีปัญหาการใช้งาน แจ้งปัญหาพร้อมแนบรูปหรือวิดีโอได้ที่ลิงก์ด้านล่าง โดยใช้เบอร์โทรที่ลงทะเบียนไว้',
+    prefill: 'product',
+    subject: 'ลิงก์แจ้งปัญหาสินค้า',
+    intro: 'หากสินค้ามีปัญหาการใช้งาน แจ้งปัญหาพร้อมแนบรูปหรือวิดีโอได้ที่ลิงก์ด้านล่าง ส่งครั้งเดียวจบ ทีมงานจะรับเรื่องและอัปเดตสถานะให้ติดตามได้',
   },
   {
     value: 'status',
@@ -44,7 +37,7 @@ const DESTINATIONS = [
     path: '/status',
     prefill: 'sn',
     subject: 'ลิงก์ตรวจสอบสถานะงานบริการ',
-    intro: 'ติดตามสถานะงานบริการได้ที่ลิงก์ด้านล่าง โดยใช้เบอร์โทรที่ลงทะเบียนไว้',
+    intro: 'ติดตามสถานะงานบริการได้ที่ลิงก์ด้านล่าง โดยใช้เลขที่เคสหรือ Serial Number คู่กับเบอร์โทรที่ใช้แจ้งปัญหา',
   },
   {
     value: 'home',
@@ -52,7 +45,7 @@ const DESTINATIONS = [
     path: '/',
     prefill: 'none',
     subject: 'ลิงก์ศูนย์บริการหลังการขาย',
-    intro: 'ลงทะเบียนสินค้า แจ้งปัญหา และติดตามสถานะงานบริการได้ที่ลิงก์ด้านล่าง',
+    intro: 'แจ้งปัญหาสินค้าและติดตามสถานะงานบริการได้ที่ลิงก์ด้านล่าง',
   },
   {
     value: 'custom',
@@ -112,8 +105,8 @@ export default function QrCodePage() {
 
   const [origin, setOrigin] = useState('')
   const [canShare, setCanShare] = useState(false)
-  const [destination, setDestination] = useState<Destination>('register')
-  const [customPath, setCustomPath] = useState('/register')
+  const [destination, setDestination] = useState<Destination>('report')
+  const [customPath, setCustomPath] = useState('/report')
   const [prefill, setPrefill] = useState<Prefill>(EMPTY_PREFILL)
   const [intros, setIntros] = useState(DEFAULT_INTROS)
   const [size, setSize] = useState(320)
@@ -243,11 +236,11 @@ export default function QrCodePage() {
             </Field>
 
             {destination === 'custom' && (
-              <Field label="พาธหรือ URL" hint="เช่น /register หรือ https://example.com/promo">
+              <Field label="พาธหรือ URL" hint="เช่น /report หรือ https://example.com/promo">
                 <Input
                   value={customPath}
                   onChange={(e) => setCustomPath(e.target.value)}
-                  placeholder="/register"
+                  placeholder="/report"
                 />
               </Field>
             )}
@@ -300,7 +293,7 @@ export default function QrCodePage() {
                 )}
                 {target.prefill === 'product' && (
                   <p className="text-xs leading-relaxed text-navy-400">
-                    ถ้า Serial Number นี้ผูกผลิตภัณฑ์ไว้ในระบบแล้ว หน้าลงทะเบียนจะใช้ข้อมูลสินค้าตามระบบแทน ·
+                    ค่าที่กรอกไว้จะไปอยู่ในรายการสินค้ารายการแรกของหน้าแจ้งปัญหา ลูกค้าแก้ไขหรือเพิ่มรายการเองได้ ·
                     ชื่อภาษาไทยทำให้ลิงก์ยาวขึ้นมาก (อักษรไทยถูกแปลงเป็นรหัสในลิงก์) ถ้าอยากได้ลิงก์สั้นใส่แค่ Serial Number ก็พอ
                   </p>
                 )}

@@ -90,28 +90,60 @@ CREATE TABLE IF NOT EXISTS registrations (
   INDEX idx_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- เคส 1 ครั้งที่ลูกค้าแจ้ง — ผู้แจ้ง หน่วยงาน โครงการ อยู่ในแถวนี้ ส่วนสินค้า (หลายรายการได้) อยู่ที่ issue_items
+-- เคสยุคก่อน พ.ย. 2026 ผูกกับ registration (1 เคส = 1 SN ที่ลงทะเบียน) — db:init คัดลอกผู้แจ้ง/สินค้าของเคสพวกนั้น
+-- มาไว้ที่คอลัมน์ reporter_* และ issue_items แล้ว โค้ดจึงอ่านจากที่เดียวกันทั้งเคสเก่าและใหม่ (ดู MIGRATIONS)
 CREATE TABLE IF NOT EXISTS issue_reports (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  registration_id INT NOT NULL,
-  description TEXT NOT NULL,
+  registration_id INT NULL,                  -- เคสยุคก่อนเท่านั้น — เคสใหม่เป็น NULL
+  reporter_name VARCHAR(255),                -- ชื่อผู้แจ้ง
+  reporter_phone VARCHAR(15),                -- เบอร์ผู้แจ้ง = กุญแจเช็คสถานะ (คู่กับเลขที่เคสหรือ SN)
+  reporter_email VARCHAR(255),
+  org_customer_id INT NULL,                  -- customers.customer_id ของระบบงาน (tjc-api) · NULL = ลูกค้าพิมพ์ชื่อหน่วยงานเอง
+  org_name VARCHAR(255),                     -- ชื่อหน่วยงาน ณ ตอนแจ้ง (เก็บค่าไว้ ไม่อ้างอิงข้ามระบบตอนแสดงผล)
+  org_province VARCHAR(100),
+  project_ref_id INT NULL,                   -- projects.id ของระบบงาน · NULL = ไม่ได้เลือกโครงการ
+  project_name VARCHAR(255),
+  project_code VARCHAR(50),
+  contract_no VARCHAR(100),
+  project_warranty_start DATE,               -- วันรับประกันของโครงการจากระบบงาน ณ ตอนแจ้ง · NULL = ไม่มีข้อมูล / ไม่ได้เลือกโครงการ
+  project_warranty_end DATE,                 -- (คนละเรื่องกับคอลัมน์ประกันยุคเก่าที่เลิกใช้ — ค่านี้มาจาก projects ของ tjc-api เท่านั้น)
+  description TEXT NOT NULL,                 -- เคสใหม่ = รายละเอียดเพิ่มเติม (ว่างได้ — อาการอยู่ที่ issue_items) · เคสเก่า = อาการ
   status ENUM('pending','in_progress','resolved','closed') NOT NULL DEFAULT 'pending',
   in_warranty TINYINT(1) NOT NULL DEFAULT 1, -- เลิกใช้ (ดูหัวไฟล์)
   admin_note TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (registration_id) REFERENCES registrations(id),
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  INDEX idx_reporter_phone (reporter_phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- สินค้าแต่ละรายการในเคส — แจ้งหลายสินค้าพร้อมกันได้ แต่ละรายการมีอาการของตัวเอง
+CREATE TABLE IF NOT EXISTS issue_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  issue_report_id INT NOT NULL,
+  project_item_id INT NULL,                  -- project_items.id ของระบบงาน · NULL = ลูกค้าพิมพ์ชื่อสินค้าเอง
+  product_name VARCHAR(255) NOT NULL,
+  model VARCHAR(255),
+  sn VARCHAR(50),                            -- ไม่บังคับ — สินค้าบางชนิดไม่มี Serial Number
+  description TEXT,                          -- อาการของสินค้านี้ · เคสยุคก่อนเป็น NULL (อาการอยู่ที่ issue_reports.description)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (issue_report_id) REFERENCES issue_reports(id) ON DELETE CASCADE,
+  INDEX idx_sn (sn)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS issue_attachments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   issue_report_id INT NOT NULL,
+  issue_item_id INT NULL,                    -- รายการสินค้าที่ไฟล์นี้แนบมา (issue_items.id) · NULL = ไฟล์ระดับเคส (เคสที่แจ้งก่อนแยกไฟล์ตามรายการ)
   file_type ENUM('image','video') NOT NULL,
   file_path VARCHAR(500) NOT NULL,
   original_name VARCHAR(255),
   file_size INT,                             -- bytes
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (issue_report_id) REFERENCES issue_reports(id) ON DELETE CASCADE
+  FOREIGN KEY (issue_report_id) REFERENCES issue_reports(id) ON DELETE CASCADE,
+  INDEX idx_issue_item (issue_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Audit log: ใครทำอะไรเมื่อไหร่ (generate SN, อัปเดตเคส ฯลฯ)
@@ -123,4 +155,13 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (admin_id) REFERENCES admins(id),
   INDEX idx_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ค่าตั้งค่าของระบบที่แอดมินแก้ได้จากหน้า "ตั้งค่า" (/admin/settings) — 1 แถวต่อ 1 ค่า
+-- company_name = ชื่อบริษัทของระบบชุดนี้ ส่งไปกับทุกเคสใน /api/service/issues* ให้ระบบแจ้งซ่อมรู้ว่าเคสมาจากบริษัทไหน
+-- ตารางใหม่ทั้งตาราง จึงไม่ต้องมีรายการใน MIGRATIONS — db:init รันไฟล์นี้ทุกครั้ง DB เดิมก็ได้ตารางนี้เพิ่ม
+CREATE TABLE IF NOT EXISTS settings (
+  setting_key VARCHAR(100) PRIMARY KEY,
+  setting_value TEXT,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

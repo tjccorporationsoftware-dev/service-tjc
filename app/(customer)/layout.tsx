@@ -54,7 +54,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             </span>
             <span className="leading-tight">
               <span className={`block text-[15px] font-bold tracking-wide ${look.name}`}>TJC SERVICE</span>
-              <span className={`block text-[11px] ${look.sub}`}>ระบบลงทะเบียนสินค้า</span>
+              <span className={`block text-[11px] ${look.sub}`}>แจ้งปัญหาและติดตามงานบริการ</span>
             </span>
           </Link>
           <CustomerNav />
@@ -66,7 +66,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
       <footer className="border-t border-navy-100 bg-white">
         <div className="mx-auto max-w-5xl px-4 py-5 text-center text-xs text-navy-400">
-          ระบบลงทะเบียนสินค้า ·{' '}
+          ระบบแจ้งปัญหาสินค้า ·{' '}
           <Link href="/admin/login" className="transition hover:text-navy-600 hover:underline">
             สำหรับเจ้าหน้าที่
           </Link>

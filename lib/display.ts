@@ -11,30 +11,28 @@ export function caseNumber(id: number): string {
   return `CASE-${String(id).padStart(6, '0')}`
 }
 
+export type WarrantyState =
+  | { kind: 'not_started'; label: string }
+  | { kind: 'active'; days: number; label: string }
+  | { kind: 'expired'; label: string }
+
+/** ใกล้หมดประกันเมื่อเหลือไม่เกินกี่วัน — ค่าเริ่มต้นเดียวกับ alert_warranty_days ของระบบงาน */
+export const WARRANTY_ALERT_DAYS = 30
+
+/**
+ * สถานะประกันของโครงการ ณ วันที่ `on` (ทุกค่าเป็น 'YYYY-MM-DD' local) — นับแบบ project_dashboard.php:
+ * ก่อนวันเริ่ม = ยังไม่เริ่มนับ · ถึงวันหมด (รวมวันหมด) = อยู่ในประกัน · หลังจากนั้น = หมดประกัน
+ */
+export function warrantyState(start: string, end: string, on: string): WarrantyState {
+  if (on < start) return { kind: 'not_started', label: 'ยังไม่เริ่มนับระยะประกัน' }
+  if (on > end) return { kind: 'expired', label: 'หมดประกันแล้ว' }
+  const days = Math.round((Date.parse(`${end}T00:00:00`) - Date.parse(`${on}T00:00:00`)) / 86_400_000) + 1
+  return { kind: 'active', days, label: `อยู่ในประกัน · เหลืออีก ${days.toLocaleString('th-TH')} วัน` }
+}
+
 export const ISSUE_STATUS_LABEL: Record<string, string> = {
   pending: 'รอดำเนินการ',
   in_progress: 'กำลังดำเนินการ',
   resolved: 'แก้ไขแล้ว',
   closed: 'ปิดเคส',
-}
-
-export type SnDisplayStatus = 'available' | 'started' | 'registered' | 'void'
-
-/**
- * สถานะที่ควรโชว์ให้แอดมินดู — ต่างจาก serial_numbers.status ดิบตรงที่แยก
- * "มี registration เปล่าที่ยังไม่มีลูกค้า" (started) ออกจาก "ลูกค้าลงทะเบียนเองแล้ว" (registered)
- * แม้ทั้งคู่จะเก็บเป็น status = 'registered' เหมือนกันในฐานข้อมูลก็ตาม
- * (started เกิดจากปุ่ม "เริ่มประกัน" ยุคก่อนเลิกใช้การรับประกัน — SN ใหม่ไม่มีทางเป็นสถานะนี้แล้ว)
- */
-export function snDisplayStatus(snStatus: string, phone: string | null): SnDisplayStatus {
-  if (snStatus === 'void') return 'void'
-  if (snStatus === 'available') return 'available'
-  return phone ? 'registered' : 'started'
-}
-
-export const SN_DISPLAY_STATUS_LABEL: Record<SnDisplayStatus, string> = {
-  available: 'ยังไม่ลงทะเบียน',
-  started: 'รอลูกค้ากรอกข้อมูล',
-  registered: 'ลงทะเบียนแล้ว',
-  void: 'ยกเลิก',
 }

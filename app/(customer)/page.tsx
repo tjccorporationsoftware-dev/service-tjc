@@ -5,7 +5,6 @@ import {
   BadgeCheck,
   Camera,
   ClipboardCheck,
-  FileSignature,
   LockKeyhole,
   Search,
   Sparkle,
@@ -41,46 +40,39 @@ const revealAt = (index: number) => ({ '--reveal-i': index }) as CSSProperties
 
 const ACTIONS = [
   {
-    href: '/register',
-    icon: FileSignature,
-    title: 'ลงทะเบียนสินค้า',
-    text: 'กรอก Serial Number และข้อมูลสินค้าได้ด้วยตัวเอง ไม่ต้องรอเจ้าหน้าที่',
-    cta: 'ลงทะเบียนเลย',
-  },
-  {
     href: '/report',
     icon: Wrench,
     title: 'แจ้งปัญหา',
-    text: `อธิบายอาการ แนบรูปได้ ${UPLOAD_LIMITS.image.maxCount} รูปและวิดีโอ ${UPLOAD_LIMITS.video.maxCount} คลิป รับเลขที่เคสทันที`,
-    cta: 'แจ้งปัญหา',
+    text: `ค้นหาหน่วยงาน เลือกสินค้าที่มีปัญหา แจ้งหลายรายการพร้อมกันได้ แนบรูป ${UPLOAD_LIMITS.image.maxCount} รูปและวิดีโอ ${UPLOAD_LIMITS.video.maxCount} คลิปต่อรายการ รับเลขที่เคสทันที`,
+    cta: 'แจ้งปัญหาเลย',
   },
   {
     href: '/status',
     icon: Search,
     title: 'เช็คสถานะ',
-    text: 'ติดตามความคืบหน้าและหมายเหตุจากเจ้าหน้าที่ด้วย SN และเบอร์โทร',
+    text: 'ติดตามความคืบหน้าและหมายเหตุจากเจ้าหน้าที่ ด้วยเลขที่เคสและเบอร์โทรที่ใช้แจ้ง',
     cta: 'ตรวจสอบสถานะ',
   },
 ]
 
 /** ตัวเลขที่ตรงกับระบบจริงเท่านั้น — ห้ามใส่สถิติที่แต่งขึ้น */
 const STATS = [
-  { value: 3, suffix: '', label: 'ขั้นตอนง่าย ๆ', note: 'ลงทะเบียน → แจ้ง → ติดตาม' },
-  { value: UPLOAD_LIMITS.image.maxCount, suffix: 'รูป', label: 'แนบได้ต่อการแจ้ง', note: `พร้อมวิดีโอ ${UPLOAD_LIMITS.video.maxCount} คลิป` },
+  { value: 3, suffix: '', label: 'ขั้นตอนง่าย ๆ', note: 'แจ้ง → แนบรูป → ติดตาม' },
+  { value: UPLOAD_LIMITS.image.maxCount, suffix: 'รูป', label: 'แนบได้ต่อรายการ', note: `พร้อมวิดีโอ ${UPLOAD_LIMITS.video.maxCount} คลิป` },
   { value: 24, suffix: 'ชม.', label: 'เช็คสถานะได้ตลอด', note: 'ไม่ต้องรอเวลาทำการ' },
   { value: 100, suffix: '%', label: 'ทำผ่านเว็บ', note: 'ไม่ต้องติดตั้งแอป' },
 ]
 
 const STEPS = [
   {
-    icon: FileSignature,
-    title: 'ลงทะเบียนสินค้า',
-    text: 'กรอกชื่อ เบอร์โทร และ Serial Number จากสติกเกอร์บนตัวเครื่อง',
-  },
-  {
     icon: Wrench,
     title: 'แจ้งปัญหา',
-    text: 'เมื่อพบอาการผิดปกติ อธิบายพร้อมแนบรูปหรือวิดีโอ แล้วรับเลขที่เคส',
+    text: 'ค้นหาหน่วยงาน เลือกโครงการและสินค้าที่มีปัญหา บอกอาการ และเบอร์ติดต่อ',
+  },
+  {
+    icon: Camera,
+    title: 'แนบรูปหรือวิดีโอ',
+    text: 'ให้ทีมงานเห็นอาการจริง กดส่งครั้งเดียวรับเลขที่เคสทันที',
   },
   {
     icon: Search,
@@ -92,13 +84,13 @@ const STEPS = [
 const BENEFITS = [
   {
     icon: ClipboardCheck,
-    title: 'ลงทะเบียนเองได้ทันที',
-    text: 'ไม่ต้องรอเจ้าหน้าที่ แจ้งปัญหาได้เลยหลังลงทะเบียน',
+    title: 'แจ้งได้ทันที หน้าเดียวจบ',
+    text: 'ไม่ต้องสมัครสมาชิก ไม่ต้องรอเจ้าหน้าที่ กรอกครั้งเดียวรับเลขที่เคส',
   },
   {
     icon: BadgeCheck,
-    title: 'ลงทะเบียนครั้งเดียว ใช้ได้ตลอด',
-    text: 'ข้อมูลสินค้าถูกเก็บไว้อ้างอิงทุกครั้งที่ขอรับบริการ',
+    title: 'รู้จักหน้างานของท่าน',
+    text: 'เลือกหน่วยงานและโครงการ ระบบดึงรายการสินค้าที่ส่งมอบมาให้เลือก ไม่ต้องพิมพ์เอง',
   },
   {
     icon: Camera,
@@ -129,9 +121,9 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* ── ทางลัด 3 งานหลัก — ซ้อนขึ้นไปทับขอบล่างของ hero ─────── */}
+      {/* ── ทางลัด 2 งานหลัก — ซ้อนขึ้นไปทับขอบล่างของ hero ─────── */}
       <section className="relative z-10 mx-auto -mt-24 max-w-5xl px-4">
-        <div className="grid gap-5 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2">
           {ACTIONS.map(({ href, icon: Icon, title, text, cta }, index) => (
             <div key={href} className="motion-safe:animate-rise" style={delay(850 + index * 130)}>
               <Link
@@ -183,7 +175,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── ประเภทอุปกรณ์ที่ลงทะเบียนได้ ─────────────────────────── */}
+      {/* ── ประเภทอุปกรณ์ที่รับบริการ ───────────────────────────── */}
       <section className="mx-auto max-w-5xl px-4 pt-24 sm:pt-32">
         <SectionHeading {...SITE.categoriesHeading} />
 
@@ -260,7 +252,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── ทำไมต้องลงทะเบียน ──────────────────────────────────── */}
+      {/* ── ทำไมต้องแจ้งผ่านระบบ ─────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-4 pb-24 sm:pb-32">
         <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr]">
           <div className={`reveal relative isolate overflow-hidden ${D.brandPanel} p-8 text-white shadow-soft-lg sm:p-10`}>
@@ -274,18 +266,18 @@ export default function HomePage() {
               aria-hidden
               className="absolute -top-16 -left-16 -z-10 h-48 w-48 rounded-full bg-white/10 blur-2xl motion-safe:animate-aurora"
             />
-            <p className="text-sm font-semibold tracking-wide text-brand-100">ทำไมต้องลงทะเบียน</p>
+            <p className="text-sm font-semibold tracking-wide text-brand-100">ทำไมต้องแจ้งผ่านระบบ</p>
             <h2 className="mt-3 text-2xl leading-snug font-bold sm:text-3xl">
-              บริการหลังการขายที่รวดเร็ว เริ่มต้นจากการลงทะเบียน
+              บริการหลังการขายที่รวดเร็ว เริ่มจากการแจ้งที่ครบถ้วน
             </h2>
             <p className="mt-4 leading-relaxed text-brand-100">
-              ข้อมูลที่ลงทะเบียนไว้ช่วยให้ทีมงานรู้ทันทีว่าเป็นเครื่องไหน รุ่นอะไร และติดต่อท่านกลับได้เมื่อแจ้งปัญหา
+              ข้อมูลเครื่อง อาการ และรูปที่แนบมา ช่วยให้ทีมงานรู้ทันทีว่าเป็นเครื่องไหน เกิดอะไรขึ้น และติดต่อท่านกลับได้เร็ว
             </p>
             <Link
-              href="/register"
+              href="/report"
               className="group mt-8 inline-flex items-center gap-2 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25"
             >
-              เริ่มลงทะเบียน
+              เริ่มแจ้งปัญหา
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </Link>
           </div>

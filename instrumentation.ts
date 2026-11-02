@@ -10,7 +10,17 @@ export async function register() {
   const { getBrand } = await import('@/lib/brand')
   const brand = getBrand()
 
-  if (process.env.NODE_ENV === 'production') return
+  if (process.env.NODE_ENV === 'production') {
+    // ค่าที่ปล่อยไว้แบบ dev บน production เป็นช่องโหว่ — เตือนดัง ๆ ตั้งแต่ boot (ไม่หยุด process ให้เว็บล่ม) ไม่ log ค่าใด ๆ
+    const warnings = [
+      !process.env.DB_PASSWORD && 'DB_PASSWORD ว่าง — แอปต่อฐานข้อมูลโดยไม่มีรหัสผ่าน',
+      (process.env.DB_USER ?? 'root') === 'root' && 'DB_USER=root — ควรใช้ผู้ใช้เฉพาะแอปที่มีสิทธิ์แค่ฐานของตัวเอง',
+      process.env.RATE_LIMIT_ENABLED === 'false' && 'RATE_LIMIT_ENABLED=false — ปิด rate limit บน production',
+      !process.env.TRUSTED_PROXY_HOPS && 'ไม่ได้ตั้ง TRUSTED_PROXY_HOPS — ใช้ค่า 1 (reverse proxy ชั้นเดียว); หลัง Cloudflare ต้องตั้ง 2',
+    ].filter((w): w is string => Boolean(w))
+    for (const warning of warnings) console.error(`⚠ การตั้งค่าความปลอดภัย: ${warning}`)
+    return
+  }
 
   // import แบบ dynamic เพื่อไม่ให้ mysql2 ถูกดึงเข้า runtime อื่น (mysql2 อยู่ใน serverExternalPackages)
   // createPool ไม่ได้เปิดคอนเนกชันทันที การ import ตรงนี้จึงไม่ทำให้ boot ช้าลง

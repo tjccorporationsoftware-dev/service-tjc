@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Check, CheckCircle2, FileSignature, ImagePlus, Search, Sparkles, Wrench } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2, ImagePlus, Search, Sparkles, Wrench } from 'lucide-react'
 import { SITE } from '@/lib/site-content'
 import { TIMELINE, TRUST, delay } from './shared'
 
@@ -64,15 +64,15 @@ export function TechHero() {
             className="mt-10 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start motion-safe:animate-rise"
             style={delay(560)}
           >
-            <Link href="/register" className={CTA_PRIMARY}>
+            <Link href="/report" className={CTA_PRIMARY}>
               <Shine />
-              <FileSignature className="h-5 w-5 text-brand-600" />
-              ลงทะเบียนสินค้า
+              <Wrench className="h-5 w-5 text-brand-600" />
+              แจ้งปัญหา
               <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
             </Link>
-            <Link href="/report" className={CTA_GHOST}>
-              <Wrench className="h-5 w-5 transition duration-300 group-hover:-rotate-12" />
-              แจ้งปัญหา
+            <Link href="/status" className={CTA_GHOST}>
+              <Search className="h-5 w-5" />
+              เช็คสถานะ
             </Link>
           </div>
 
@@ -115,13 +115,13 @@ export function TechClosing() {
           พร้อมเริ่มต้น<span className="text-shimmer motion-safe:animate-shimmer">แล้วหรือยัง?</span>
         </h2>
         <p className="mx-auto mt-5 max-w-xl leading-relaxed text-navy-200 sm:text-lg">
-          ลงทะเบียนสินค้าของคุณวันนี้ เพื่อรับบริการหลังการขายได้รวดเร็วยิ่งขึ้นเมื่อต้องการ
+          สินค้ามีปัญหา? แจ้งพร้อมแนบรูปหรือวิดีโอได้ทันที ทีมงานรับเรื่องและอัปเดตสถานะให้ติดตามได้ตลอด
         </p>
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/register" className={CTA_PRIMARY}>
+          <Link href="/report" className={CTA_PRIMARY}>
             <Shine />
-            <FileSignature className="h-5 w-5 text-brand-600" />
-            ลงทะเบียนสินค้า
+            <Wrench className="h-5 w-5 text-brand-600" />
+            แจ้งปัญหา
             <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
           </Link>
           <Link href="/status" className={CTA_GHOST}>
@@ -302,8 +302,8 @@ function HeroShowcase() {
             <CheckCircle2 className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-navy-900">ลงทะเบียนสำเร็จ</p>
-            <p className="text-xs text-navy-400">แจ้งปัญหาได้ทันที</p>
+            <p className="text-sm font-semibold text-navy-900">ส่งเรื่องสำเร็จ</p>
+            <p className="text-xs text-navy-400">ได้เลขที่เคสทันที</p>
           </div>
         </div>
       </div>

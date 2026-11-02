@@ -6,6 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { Alert, Button, Card, Field, Input } from '@/components/admin/ui'
 
+/** path ที่ขึ้นต้นด้วย "/" ตัวเดียว (ไม่ใช่ "//" หรือ "/\" ที่เบราว์เซอร์ตีความเป็นโดเมนอื่น) — นอกนั้นกลับหน้าภาพรวม */
+function safeInternalPath(value: string | null): string {
+  if (value && /^\/(?![/\\])/.test(value)) return value
+  return '/admin/dashboard'
+}
+
 export default function AdminLoginPage() {
   return (
     <Suspense>
@@ -17,7 +23,8 @@ export default function AdminLoginPage() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextPath = searchParams.get('next') || '/admin/dashboard'
+  // รับเฉพาะ path ภายในเว็บ — ค่าอย่าง //evil.example หรือ https://… จะพาคนที่เพิ่ง login ไปเว็บปลอมได้ (open redirect)
+  const nextPath = safeInternalPath(searchParams.get('next'))
 
   const [form, setForm] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
@@ -58,7 +65,7 @@ function LoginForm() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-soft-lg">
             <ShieldCheck className="h-6 w-6" strokeWidth={2.25} />
           </div>
-          <h1 className="text-xl font-bold text-white">ระบบจัดการลงทะเบียนสินค้า</h1>
+          <h1 className="text-xl font-bold text-white">ระบบจัดการงานบริการหลังการขาย</h1>
           <p className="mt-1 text-sm text-navy-300">TJC SERVICE</p>
         </div>
 

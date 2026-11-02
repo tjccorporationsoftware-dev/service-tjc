@@ -60,6 +60,53 @@ export type SavedUpload = {
 
 export class UploadError extends Error {}
 
+/** ไบต์ต้นไฟล์ที่ต้องอ่านเพื่อดูลายเซ็น — กล่อง ftyp ของ MP4/MOV/HEIC อยู่ที่ offset 4 */
+const SNIFF_BYTES = 16
+
+const startsWith = (buf: Uint8Array, bytes: number[], offset = 0) =>
+  bytes.every((b, i) => buf[offset + i] === b)
+const ascii = (buf: Uint8Array, offset: number, length: number) =>
+  String.fromCharCode(...buf.subarray(offset, offset + length))
+
+/** ชนิดย่อย (brand) ในกล่อง ftyp ของไฟล์ตระกูล ISO Base Media — ตัวที่รูป/คลิปจากมือถือใช้จริง */
+const FTYP_BRANDS: Record<string, readonly string[]> = {
+  'image/heic': ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'],
+  'image/heif': ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'],
+  'video/mp4': ['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'dash', 'M4V ', 'M4A ', 'f4v ', 'hvc1'],
+  'video/quicktime': ['qt  '],
+  'video/3gpp': ['3gp4', '3gp5', '3gp6', '3gp7', '3ge6', '3ge7', '3gg6', '3gr6', '3gs6'],
+}
+
+/**
+ * เนื้อไฟล์ตรงกับชนิดที่อ้างไหม — file.type และนามสกุลเป็นค่าที่ฝั่งส่งตั้งเองได้ จึงดู magic bytes ด้วย
+ * ไม่ตรง = ปฏิเสธ (กันไฟล์แปลกปลอมในชื่อ .jpg/.mp4 ถูกเก็บแล้วส่งต่อไปเครื่องพนักงานผ่านใบงาน)
+ * ตระกูล ftyp ยอมให้ brand ของ MP4/MOV/3GP สลับกันได้ เพราะมือถือแต่ละยี่ห้อตั้งชื่อชนิดไฟล์ไม่ตรงกับ brand เสมอ
+ */
+export function matchesMagicBytes(head: Uint8Array, mime: string): boolean {
+  switch (mime) {
+    case 'image/jpeg':
+      return startsWith(head, [0xff, 0xd8, 0xff])
+    case 'image/png':
+      return startsWith(head, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    case 'image/webp':
+      return ascii(head, 0, 4) === 'RIFF' && ascii(head, 8, 4) === 'WEBP'
+    case 'video/webm':
+      return startsWith(head, [0x1a, 0x45, 0xdf, 0xa3])
+    case 'image/heic':
+    case 'image/heif':
+    case 'video/mp4':
+    case 'video/quicktime':
+    case 'video/3gpp': {
+      if (ascii(head, 4, 4) !== 'ftyp') return false
+      const brand = ascii(head, 8, 4)
+      const video = [...FTYP_BRANDS['video/mp4'], ...FTYP_BRANDS['video/quicktime'], ...FTYP_BRANDS['video/3gpp']]
+      return (mime.startsWith('image/') ? FTYP_BRANDS[mime] : video).includes(brand)
+    }
+    default:
+      return false
+  }
+}
+
 export async function saveUpload(file: File, kind: 'image' | 'video'): Promise<SavedUpload> {
   const limits = UPLOAD_LIMITS[kind]
 
@@ -74,6 +121,11 @@ export async function saveUpload(file: File, kind: 'image' | 'video'): Promise<S
     throw new UploadError(`ไฟล์ "${file.name}" ว่างเปล่า`)
   }
 
+  const buffer = Buffer.from(await file.arrayBuffer())
+  if (!matchesMagicBytes(buffer.subarray(0, SNIFF_BYTES), mime)) {
+    throw new UploadError(`ไฟล์ "${file.name}" ไม่ใช่${kind === 'image' ? 'รูปภาพ' : 'วิดีโอ'}ชนิดที่ระบุ — ${limits.label}`)
+  }
+
   // ตั้งชื่อไฟล์ใหม่เองทั้งหมด ไม่แตะชื่อเดิมจากผู้ใช้ → กัน path traversal
   const now = new Date()
   const dir = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -82,7 +134,6 @@ export async function saveUpload(file: File, kind: 'image' | 'video'): Promise<S
   const relativePath = `${dir}/${name}`
 
   await mkdir(path.join(UPLOAD_ROOT, dir), { recursive: true })
-  const buffer = Buffer.from(await file.arrayBuffer())
   await writeFile(path.join(UPLOAD_ROOT, dir, name), buffer)
 
   return {

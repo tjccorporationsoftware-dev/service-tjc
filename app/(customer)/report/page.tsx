@@ -1,22 +1,25 @@
 'use client'
 
 import { Suspense, useEffect, useEffectEvent, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import type { ZodError } from 'zod'
 import {
-  ArrowRight,
+  Building2,
   CheckCircle2,
-  ClipboardCheck,
+  FolderOpen,
   House,
-  ImagePlus,
   Lightbulb,
+  Loader2,
+  LockKeyhole,
+  Mail,
   Paperclip,
   Phone,
+  Plus,
   QrCode,
   Search,
   Send,
   Trash2,
-  Video as VideoIcon,
+  User,
   Wrench,
 } from 'lucide-react'
 import {
@@ -25,6 +28,7 @@ import {
   Card,
   Field,
   FormSection,
+  Input,
   InputWithIcon,
   LinkButton,
   PageBody,
@@ -34,78 +38,84 @@ import {
   TipList,
 } from '@/components/ui'
 import { ErrorDialog } from '@/components/error-dialog'
+import { AttachmentUsage, ItemAttachments, TOTAL_TOO_BIG, sizeOf } from '@/components/item-attachments'
+import { OrgSearch, type OrgOption } from '@/components/org-search'
+import { ProductInput, type ProductOption } from '@/components/product-input'
+import { WarrantyNote } from '@/components/warranty-note'
 import { readPrefill } from '@/lib/customer-link'
 import { SITE } from '@/lib/site-content'
-import { UPLOAD_LIMITS } from '@/lib/validations'
+import type { LookupProject } from '@/lib/tjc-api'
+import { reportSchema, MAX_REPORT_ITEMS, UPLOAD_LIMITS } from '@/lib/validations'
+
+/** รายการแนะนำสินค้าต่อช่อง — โครงการใหญ่มีหลายร้อยรายการ พิมพ์เพิ่มเพื่อกรองให้แคบลง */
+const MAX_SUGGESTIONS = 100
 
 /**
- * ระบุทั้ง MIME และนามสกุล เพราะเบราว์เซอร์บนมือถือบางตัวไม่รู้จัก MIME ของ HEIC
- * ถ้าใส่แต่ MIME รูปที่ถ่ายจาก iPhone จะถูกเทาไว้จนเลือกไม่ได้ในหน้าต่างเลือกไฟล์
+ * หน่วยงานของผู้แจ้ง
+ * - search = ยังไม่ได้เลือก (แสดงช่องค้นหา)
+ * - picked = เลือกจากข้อมูลหน้างานของระบบงาน — projects เป็น null ระหว่างโหลด
+ * - manual = พิมพ์ชื่อเอง (ค้นไม่เจอ / ปิดการค้นหาไว้)
  */
-const IMAGE_ACCEPT =
-  'image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic,.heif,.webp'
-// .mov = คลิปจาก iPhone · .3gp/.webm = Android บางรุ่น/บางแอป — ต้องตรงกับ UPLOAD_LIMITS.video.mimeTypes
-const VIDEO_ACCEPT = 'video/mp4,video/quicktime,video/3gpp,video/webm,.mp4,.mov,.3gp,.webm'
+type Org =
+  | { mode: 'search' }
+  | { mode: 'manual'; name: string }
+  | { mode: 'picked'; org: OrgOption; projects: LookupProject[] | null; error: string }
 
-const toMB = (bytes: number) => bytes / 1024 / 1024
-const sizeOf = (files: File[]) => files.reduce((sum, f) => sum + f.size, 0)
-/** เตือนเมื่อรูป + วิดีโอรวมกันเกิน UPLOAD_LIMITS.totalMaxSize (Cloudflare ตัดคำขอเกิน 100MB) */
-const TOTAL_TOO_BIG = `ไฟล์แนบใหญ่เกินกำหนด — ${UPLOAD_LIMITS.totalLabel} กรุณาลดจำนวนรูปหรือใช้คลิปที่สั้นลง`
-/** ใช้ถึงสัดส่วนนี้ของเพดานรวมแล้วเตือนว่าใกล้เต็ม (ส่วนที่เกินถูกกันไว้ตั้งแต่ตอนเลือกไฟล์) */
-const NEAR_FULL_RATIO = 0.8
-
-/** แถบพื้นที่ไฟล์แนบที่ใช้ไป — ปกติสีแบรนด์ ใกล้เต็มเปลี่ยนเป็นสีเหลืองพร้อมบอกว่าเหลืออีกเท่าไร */
-function AttachmentUsage({ bytes }: { bytes: number }) {
-  const limitMB = toMB(UPLOAD_LIMITS.totalMaxSize)
-  const usedMB = toMB(bytes)
-  const nearFull = bytes >= UPLOAD_LIMITS.totalMaxSize * NEAR_FULL_RATIO
-  const percent = Math.min(100, (bytes / UPLOAD_LIMITS.totalMaxSize) * 100)
-
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className={nearFull ? 'font-medium text-amber-700' : 'text-navy-400'}>
-          {nearFull
-            ? `ใกล้เต็มแล้ว — เหลืออีก ${Math.max(0, limitMB - usedMB).toFixed(1)} MB`
-            : 'พื้นที่ไฟล์แนบที่ใช้ไป'}
-        </span>
-        <span className="tabular shrink-0 text-navy-500">
-          {usedMB.toFixed(1)} / {Math.round(limitMB)} MB
-        </span>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="พื้นที่ไฟล์แนบที่ใช้ไป"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(percent)}
-        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy-100"
-      >
-        <div
-          className={`h-full rounded-full transition-[width] duration-300 ${nearFull ? 'bg-amber-500' : 'bg-brand-500'}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
-/** ช่องคลิก/ลากไฟล์มาวาง ใช้ทั้งรูปและวิดีโอ */
-const DROPZONE =
-  'flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-navy-200 bg-navy-50/40 px-4 py-6 text-sm font-medium text-navy-500 transition hover:border-brand-300 hover:bg-brand-50/40 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60'
-
-/** ผลค้น SN จาก /api/sn/check */
-type SnInfo = {
-  registered: boolean
-  /** มีข้อมูลติดต่อของลูกค้าผูกอยู่แล้ว — แจ้งปัญหาได้ */
-  claimed: boolean
+/** สินค้าหนึ่งรายการในฟอร์ม — key ใช้เป็น React key เท่านั้น ไม่ได้ส่งไป API */
+type ItemForm = {
+  key: number
+  project_item_id: number | null
   product_name: string
+  model: string
+  sn: string
+  description: string
+  /** ไฟล์แนบของรายการนี้ — ใบงานฝั่งระบบงานเก็บไฟล์แยกตามรายการ */
+  images: File[]
+  video: File | null
 }
+
+const blankItem = (key: number, init: Partial<ItemForm> = {}): ItemForm => ({
+  key,
+  project_item_id: null,
+  product_name: '',
+  model: '',
+  sn: '',
+  description: '',
+  images: [],
+  video: null,
+  ...init,
+})
+
+const EMPTY_REPORTER = { reporter_name: '', phone: '', email: '' }
 
 type Success = {
   case_number: string
-  product_name: string
+  org_name: string
+  project_name: string | null
+  warranty: { start: string; end: string } | null
+  items: { product_name: string; model: string | null; sn: string | null }[]
   attachments: number
+}
+
+// ฉบับร่าง — โปรดให้ฝ่ายกฎหมาย/ผู้ดูแลระบบตรวจสอบและแก้ไขเนื้อหาจริงก่อนใช้งานจริง
+const PRIVACY_TEXT = `ประกาศความเป็นส่วนตัว
+เราจัดเก็บชื่อ เบอร์โทรศัพท์ อีเมล ชื่อหน่วยงาน ข้อมูลสินค้า รายละเอียดปัญหา และไฟล์ที่ท่านแนบ เพื่อวัตถุประสงค์ในการให้บริการหลังการขาย ติดต่อกลับ และติดตามงานบริการ ข้อมูลจะถูกเก็บรักษาเท่าที่จำเป็นตามวัตถุประสงค์ดังกล่าว และจะไม่เปิดเผยต่อบุคคลภายนอกโดยไม่ได้รับอนุญาต เว้นแต่ตามที่กฎหมายกำหนด ท่านมีสิทธิขอเข้าถึง แก้ไข หรือขอให้ลบข้อมูลส่วนบุคคลของท่านได้ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล (PDPA)
+
+กรุณาเก็บเลขที่เคสและเบอร์โทรที่ใช้แจ้งไว้ สำหรับติดตามสถานะงานบริการ`
+
+const norm = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
+
+/** "2026-07-08" → "2569" */
+const thaiYear = (date: string | null) => (date ? String(Number(date.slice(0, 4)) + 543) : null)
+
+/** ข้อความ error แรก — ถ้าเป็นช่องในรายการสินค้า บอกด้วยว่ารายการที่เท่าไร */
+function describeIssue(error: ZodError): string {
+  const issue = error.issues[0]
+  if (!issue) return 'ข้อมูลไม่ถูกต้อง'
+  const [head, index] = issue.path
+  return head === 'items' && typeof index === 'number' && issue.path.length > 2
+    ? `รายการที่ ${index + 1}: ${issue.message}`
+    : issue.message
 }
 
 // useSearchParams ต้องอยู่ใต้ Suspense (เหมือนหน้า login แอดมิน)
@@ -117,117 +127,172 @@ export default function ReportPage() {
   )
 }
 
+/**
+ * แจ้งปัญหาหน้าเดียวจบ — ค้นหน่วยงาน → เลือกโครงการ → สินค้า (หลายรายการได้ แต่ละรายการมีอาการ + ไฟล์แนบของตัวเอง) → ผู้แจ้ง
+ * หน่วยงาน/โครงการ/สินค้ามาจากข้อมูลหน้างานของระบบงาน (/api/lookup/*) ไม่เจอก็พิมพ์เองได้ทุกช่อง
+ * ทั้งหมดส่งในคำขอเดียวไป POST /api/issues
+ */
 function ReportForm() {
   const searchParams = useSearchParams()
-  // ลิงก์ที่เจ้าหน้าที่ส่งมา (หน้าสร้าง QR) อาจกรอก SN ไว้ให้แล้ว — ดู lib/customer-link.ts
-  const [form, setForm] = useState(() => ({ sn: readPrefill(searchParams).sn, phone: '', description: '' }))
-  const [images, setImages] = useState<File[]>([])
-  const [imagePreviews, setImagePreviews] = useState<string[]>([])
-  const [video, setVideo] = useState<File | null>(null)
-  const [videoPreview, setVideoPreview] = useState('')
-  const [snInfo, setSnInfo] = useState<SnInfo | null>(null)
-  const [checking, setChecking] = useState(false)
+  const [products, setProducts] = useState<ProductOption[]>([])
+  const [org, setOrg] = useState<Org>({ mode: 'search' })
+  // false = ยังไม่ได้เชื่อมระบบงาน ค้นหาหน่วยงานไม่ได้ — ซ่อนทางกลับไปหน้าค้นหา
+  const [searchable, setSearchable] = useState(true)
+  const [projectId, setProjectId] = useState<number | null>(null)
+  // ลิงก์ที่เจ้าหน้าที่ส่งมา (หน้าสร้าง QR) อาจกรอก SN / สินค้าไว้ให้แล้ว — ใส่ในรายการแรก (ดู lib/customer-link.ts)
+  const [items, setItems] = useState<ItemForm[]>(() => {
+    const prefill = readPrefill(searchParams)
+    return [
+      blankItem(0, {
+        sn: prefill.sn,
+        product_name: prefill.product_name,
+        model: [prefill.product_brand, prefill.product_model].filter(Boolean).join(' '),
+      }),
+    ]
+  })
+  const nextKey = useRef(1)
+  const [reporter, setReporter] = useState(EMPTY_REPORTER)
+  const [description, setDescription] = useState('')
+  const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
   // ข้อความในหน้าต่างแจ้งเตือนกลางจอ (ErrorDialog) — ว่าง = ปิด
   const [popup, setPopup] = useState('')
-  // ข้อผิดพลาดตอนเลือกไฟล์ แสดงในส่วนไฟล์แนบ — ลูกค้ากำลังมองตรงนั้น ไม่ใช่บนสุดของฟอร์ม
+  // ไฟล์รวมทุกรายการใหญ่เกิน (Cloudflare ตอบ 413) — แสดงใต้รายการสินค้า ซึ่งเป็นที่แนบไฟล์
   const [fileError, setFileError] = useState('')
   const [success, setSuccess] = useState<Success | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const videoInputRef = useRef<HTMLInputElement>(null)
-
-  // สร้าง object URL ไว้แสดงพรีวิว แล้วคืนหน่วยความจำทุกครั้งที่ไฟล์เปลี่ยนหรือออกจากหน้า
   useEffect(() => {
-    const urls = images.map((file) => URL.createObjectURL(file))
-    void Promise.resolve().then(() => setImagePreviews(urls))
-    return () => urls.forEach((url) => URL.revokeObjectURL(url))
-  }, [images])
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => setProducts(data.products ?? []))
+      .catch(() => {})
+    // ยังไม่ได้เชื่อมระบบงาน = ค้นหาหน่วยงานไม่ได้ ให้พิมพ์ชื่อเองตั้งแต่แรก
+    fetch('/api/lookup/customers')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.enabled !== false) return
+        setSearchable(false)
+        setOrg((current) => (current.mode === 'search' ? { mode: 'manual', name: '' } : current))
+      })
+      .catch(() => {})
+  }, [])
 
-  useEffect(() => {
-    if (!video) {
-      void Promise.resolve().then(() => setVideoPreview(''))
-      return
-    }
-    const url = URL.createObjectURL(video)
-    void Promise.resolve().then(() => setVideoPreview(url))
-    return () => URL.revokeObjectURL(url)
-  }, [video])
-
-  // SN มากับลิงก์ — ตรวจครั้งเดียวตอนเปิดหน้า ลูกค้าเห็นทันทีว่าเครื่องนี้ลงทะเบียนแล้วหรือยัง
-  const checkLinkedSn = useEffectEvent(() => {
-    void checkSn()
+  // SN มากับลิงก์ — ค้นข้อมูลสินค้าครั้งเดียวตอนเปิดหน้า เหมือนลูกค้าพิมพ์เองแล้วออกจากช่อง
+  const lookupLinkedSerial = useEffectEvent(() => {
+    void lookupSerial(items[0].key, items[0].sn)
   })
   const linkedSn = searchParams.get('sn')
   useEffect(() => {
-    if (linkedSn) checkLinkedSn()
+    if (linkedSn) lookupLinkedSerial()
   }, [linkedSn])
 
-  async function checkSn() {
-    if (!form.sn.trim()) return
-    setChecking(true)
-    setSnInfo(null)
+  const projects = org.mode === 'picked' ? (org.projects ?? []) : []
+  const project = projects.find((p) => p.id === projectId) ?? null
+  // สินค้าแนะนำ: โครงการที่เลือก → ทุกโครงการของหน่วยงาน → ผลิตภัณฑ์ที่เปิดใช้งานของเว็บนี้
+  const projectOptions = (project ? [project] : projects).flatMap((p) =>
+    p.items.map((item) => ({ option: { id: item.id, name: item.name, brand: null, model: item.model }, projectId: p.id }))
+  )
+  const fromProjects = projectOptions.length > 0
+  const baseOptions: ProductOption[] = fromProjects ? projectOptions.map((o) => o.option) : products
+
+  function suggestionsFor(item: ItemForm): ProductOption[] {
+    const term = norm(item.product_name)
+    return baseOptions
+      .filter((o) => norm(o.name).includes(term) || norm(o.model).includes(term))
+      .slice(0, MAX_SUGGESTIONS)
+  }
+
+  const itemBytes = (item: ItemForm) => sizeOf(item.images) + (item.video?.size ?? 0)
+  const totalBytes = items.reduce((sum, item) => sum + itemBytes(item), 0)
+
+  function updateItem(key: number, patch: Partial<ItemForm>) {
+    setItems((list) => list.map((item) => (item.key === key ? { ...item, ...patch } : item)))
+  }
+
+  function selectProduct(key: number, option: ProductOption) {
+    const owner = fromProjects ? projectOptions.find((o) => o.option.id === option.id) : undefined
+    updateItem(key, {
+      project_item_id: owner ? option.id : null,
+      product_name: option.name,
+      model: [option.brand, option.model].filter(Boolean).join(' '),
+    })
+    // เลือกสินค้าจากรายการรวมของทุกโครงการ = รู้แล้วว่าเป็นโครงการไหน เลือกโครงการให้เลย
+    if (owner && projectId === null) setProjectId(owner.projectId)
+  }
+
+  function addItem() {
+    setItems((list) => [...list, blankItem(nextKey.current++)])
+  }
+
+  function removeItem(key: number) {
+    setItems((list) => list.filter((item) => item.key !== key))
+  }
+
+  /** เลือกโครงการใหม่ — สินค้าที่เลือกจากโครงการอื่นไว้ยังอยู่ แต่ถือว่าพิมพ์เอง (ไม่อ้างอิงรายการของโครงการเดิม) */
+  function chooseProject(id: number | null) {
+    setProjectId(id)
+    if (id === null) return
+    const allowed = new Set(projects.find((p) => p.id === id)?.items.map((item) => item.id))
+    setItems((list) =>
+      list.map((item) =>
+        item.project_item_id !== null && !allowed.has(item.project_item_id) ? { ...item, project_item_id: null } : item
+      )
+    )
+  }
+
+  async function pickOrg(picked: OrgOption) {
+    setOrg({ mode: 'picked', org: picked, projects: null, error: '' })
+    setProjectId(null)
     try {
-      const res = await fetch(`/api/sn/check?sn=${encodeURIComponent(form.sn)}`)
+      const res = await fetch(`/api/lookup/projects?customer_id=${picked.id}`)
       const data = await res.json()
-      setSnInfo(res.ok ? data : null)
-      if (!res.ok) setError(data.error ?? 'ตรวจสอบ Serial Number ไม่สำเร็จ')
-      else setError('')
+      setOrg((current) => {
+        if (current.mode !== 'picked' || current.org.id !== picked.id) return current
+        return res.ok
+          ? { ...current, projects: data.projects ?? [] }
+          : { ...current, projects: [], error: data.error ?? 'โหลดโครงการไม่สำเร็จ — กรอกสินค้าเองได้เลย' }
+      })
+      // หน่วยงานที่มีโครงการเดียว เลือกให้เลย
+      if (res.ok && data.projects?.length === 1) setProjectId(data.projects[0].id)
     } catch {
-      setError('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ')
-    } finally {
-      setChecking(false)
+      setOrg((current) =>
+        current.mode === 'picked' && current.org.id === picked.id
+          ? { ...current, projects: [], error: 'โหลดโครงการไม่สำเร็จ — กรอกสินค้าเองได้เลย' }
+          : current
+      )
     }
   }
 
-  function addImages(fileList: FileList | null) {
-    const incoming = Array.from(fileList ?? [])
-    if (incoming.length === 0) return
-    const combined = [...images, ...incoming]
-    if (combined.length > UPLOAD_LIMITS.image.maxCount) {
-      setFileError(UPLOAD_LIMITS.image.label)
-      return
-    }
-    const tooBig = incoming.find((f) => f.size > UPLOAD_LIMITS.image.maxSize)
-    if (tooBig) {
-      const mb = Math.round(UPLOAD_LIMITS.image.maxSize / 1024 / 1024)
-      setFileError(`รูป "${tooBig.name}" ใหญ่เกิน ${mb}MB`)
-      return
-    }
-    // เตือนตั้งแต่ก่อนส่ง (นับวิดีโอที่เลือกไว้ด้วย) ดีกว่าให้อัปโหลดไปจนครบแล้วค่อยโดนปฏิเสธ
-    if (sizeOf(combined) + (video?.size ?? 0) > UPLOAD_LIMITS.totalMaxSize) {
-      setFileError(TOTAL_TOO_BIG)
-      return
-    }
-    setFileError('')
-    setImages(combined)
+  function resetOrg(next: Org) {
+    setOrg(next)
+    setProjectId(null)
+    // สินค้าที่เลือกจากหน่วยงานเดิมยังคงชื่อไว้ แต่ไม่อ้างอิงรายการของหน่วยงานเดิมแล้ว
+    setItems((list) => list.map((item) => ({ ...item, project_item_id: null })))
   }
 
-  function removeImage(index: number) {
-    setImages(images.filter((_, i) => i !== index))
-    setFileError('')
-  }
-
-  function setSingleVideo(fileList: FileList | null) {
-    const file = fileList?.[0] ?? null
-    if (file && file.size > UPLOAD_LIMITS.video.maxSize) {
-      setFileError(`วิดีโอ "${file.name}" ใหญ่เกิน ${Math.round(toMB(UPLOAD_LIMITS.video.maxSize))}MB`)
-      return
-    }
-    if (file && sizeOf(images) + file.size > UPLOAD_LIMITS.totalMaxSize) {
-      setFileError(TOTAL_TOO_BIG)
-      return
-    }
-    setFileError('')
-    setVideo(file)
-  }
-
-  function handleDrop(kind: 'image' | 'video') {
-    return (event: React.DragEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      if (kind === 'image') addImages(event.dataTransfer.files)
-      else setSingleVideo(event.dataTransfer.files)
+  async function lookupSerial(key: number, sn: string) {
+    if (sn.length < 5) return
+    try {
+      const res = await fetch(`/api/sn/check?sn=${encodeURIComponent(sn)}`)
+      // 404 = SN ที่ไม่มีในระบบ / 409 = สร้างไว้แต่ยังไม่ผูกสินค้า — ลูกค้ากรอกสินค้าเอง
+      if (!res.ok) return
+      const data = await res.json()
+      // เติมให้เฉพาะรายการที่ยังไม่ได้กรอกชื่อสินค้า และ SN ยังเป็นค่าเดิม (ลูกค้าอาจแก้ไปแล้วระหว่างรอ)
+      setItems((list) =>
+        list.map((item) =>
+          item.key === key && item.sn === sn && !item.product_name.trim()
+            ? {
+                ...item,
+                project_item_id: null,
+                product_name: data.product_name ?? '',
+                model: [data.brand, data.model].filter(Boolean).join(' '),
+              }
+            : item
+        )
+      )
+    } catch {
+      // ค้นไม่ได้ก็กรอกต่อได้ตามปกติ
     }
   }
 
@@ -237,18 +302,52 @@ function ReportForm() {
     setPopup(message)
   }
 
+  /** แจ้งเพิ่มอีกเรื่อง — คงหน่วยงาน/โครงการ และข้อมูลผู้แจ้งไว้ (มักแจ้งต่อจากที่เดิม คนเดิม) */
+  function startAnother() {
+    setSuccess(null)
+    setItems([blankItem(nextKey.current++)])
+    setDescription('')
+    setError('')
+    setFileError('')
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    const payload = {
+      org_customer_id: org.mode === 'picked' ? org.org.id : null,
+      org_name: org.mode === 'picked' ? org.org.name : org.mode === 'manual' ? org.name : '',
+      org_province: org.mode === 'picked' ? (org.org.province ?? '') : '',
+      project_ref_id: project?.id ?? null,
+      project_name: project?.name ?? '',
+      project_code: project?.code ?? '',
+      contract_no: project?.contract_no ?? '',
+      items: items.map((item) => ({
+        project_item_id: item.project_item_id,
+        product_name: item.product_name,
+        model: item.model,
+        sn: item.sn,
+        description: item.description,
+      })),
+      ...reporter,
+      description,
+      consent,
+    }
+    const parsed = reportSchema.safeParse(payload)
+    if (!parsed.success) {
+      fail(describeIssue(parsed.error))
+      return
+    }
     setError('')
     setFileError('')
     setSubmitting(true)
 
     const body = new FormData()
-    body.set('sn', form.sn)
-    body.set('phone', form.phone)
-    body.set('description', form.description)
-    images.forEach((file) => body.append('images', file))
-    if (video) body.append('video', video)
+    body.set('payload', JSON.stringify(parsed.data))
+    // ไฟล์ของรายการที่ i ส่งในช่อง images_<i> / video_<i> — ลำดับเดียวกับ items ใน payload
+    items.forEach((item, index) => {
+      item.images.forEach((file) => body.append(`images_${index}`, file))
+      if (item.video) body.append(`video_${index}`, item.video)
+    })
 
     try {
       const res = await fetch('/api/issues', { method: 'POST', body })
@@ -279,7 +378,7 @@ function ReportForm() {
           tone="success"
           icon={CheckCircle2}
           title="รับเรื่องเรียบร้อย"
-          description="ทีมงานได้รับคำขอของท่านแล้ว กรุณาเก็บเลขที่เคสไว้เพื่อติดตามสถานะ"
+          description="ทีมงานได้รับเรื่องของท่านแล้ว กรุณาเก็บเลขที่เคสไว้เพื่อติดตามสถานะ"
         />
         <PageBody className="max-w-2xl">
           <Card className="p-6 text-center shadow-soft-lg sm:p-8">
@@ -289,18 +388,39 @@ function ReportForm() {
                 {success.case_number}
               </p>
             </div>
-            <dl className="mt-6 grid gap-4 text-left sm:grid-cols-2">
+            <dl className="mt-6 space-y-4 text-left">
               <div>
-                <dt className="text-xs text-navy-400">ผลิตภัณฑ์</dt>
-                <dd className="mt-0.5 wrap-anywhere text-navy-900">{success.product_name}</dd>
+                <dt className="text-xs text-navy-400">หน่วยงาน</dt>
+                <dd className="mt-0.5 wrap-anywhere text-navy-900">{success.org_name}</dd>
+                {success.project_name && (
+                  <dd className="mt-0.5 text-sm wrap-anywhere text-navy-500">โครงการ: {success.project_name}</dd>
+                )}
+                {success.warranty && (
+                  <dd className="mt-1">
+                    <WarrantyNote start={success.warranty.start} end={success.warranty.end} />
+                  </dd>
+                )}
+              </div>
+              <div>
+                <dt className="text-xs text-navy-400">สินค้าที่แจ้ง {success.items.length} รายการ</dt>
+                {success.items.map((item, index) => (
+                  <dd key={index} className="mt-0.5 wrap-anywhere text-navy-900">
+                    {index + 1}. {item.product_name}
+                    {item.model && <span className="text-navy-500"> · {item.model}</span>}
+                    {item.sn && <span className="tabular font-mono text-sm text-navy-500"> · SN {item.sn}</span>}
+                  </dd>
+                ))}
               </div>
               <div>
                 <dt className="text-xs text-navy-400">ไฟล์แนบ</dt>
-                <dd className="mt-0.5 text-navy-900">{success.attachments} รายการ</dd>
+                <dd className="mt-0.5 text-navy-900">{success.attachments} ไฟล์</dd>
               </div>
             </dl>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <LinkButton href="/status" size="lg" className="sm:flex-1">
+            <p className="mt-6 rounded-xl bg-navy-50/70 px-4 py-3 text-left text-sm leading-relaxed text-navy-500">
+              ติดตามความคืบหน้าได้ที่หน้าเช็คสถานะ ด้วยเลขที่เคสนี้และเบอร์โทรที่ใช้แจ้ง
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <LinkButton href={`/status?case=${encodeURIComponent(success.case_number)}`} size="lg" className="sm:flex-1">
                 <Search className="h-4 w-4" />
                 ติดตามสถานะเคส
               </LinkButton>
@@ -309,6 +429,13 @@ function ReportForm() {
                 กลับหน้าแรก
               </LinkButton>
             </div>
+            <button
+              type="button"
+              onClick={startAnother}
+              className="mt-4 w-full text-center text-sm font-medium text-navy-400 transition hover:text-brand-600"
+            >
+              แจ้งปัญหาเรื่องอื่นเพิ่ม
+            </button>
           </Card>
         </PageBody>
       </>
@@ -317,12 +444,12 @@ function ReportForm() {
 
   return (
     <>
-      <ErrorDialog message={popup} title="ส่งคำขอไม่สำเร็จ" onClose={() => setPopup('')} />
+      <ErrorDialog message={popup} title="ส่งเรื่องไม่สำเร็จ" onClose={() => setPopup('')} />
 
       <PageHero
         icon={Wrench}
-        title="แจ้งปัญหาการใช้งาน"
-        description="อธิบายอาการพร้อมแนบรูปหรือวิดีโอ ทีมงานจะรับเรื่องและอัปเดตสถานะให้ติดตามได้ตลอด"
+        title="แจ้งปัญหา"
+        description="ค้นหาหน่วยงานของท่าน เลือกสินค้าที่มีปัญหา (แจ้งหลายรายการพร้อมกันได้) แนบรูปหรือวิดีโอ แล้วส่งครั้งเดียวจบ ทีมงานจะรับเรื่องและอัปเดตสถานะให้ติดตามได้ตลอด"
       />
 
       <PageBody className="grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
@@ -330,203 +457,312 @@ function ReportForm() {
           <form onSubmit={handleSubmit} className="space-y-7">
             {error && <Alert tone="error">{error}</Alert>}
 
-            <FormSection
-              number={1}
-              title="ข้อมูลเครื่อง"
-              hint="ใช้ Serial Number และหมายเลขโทรศัพท์เดียวกับที่ลงทะเบียนไว้"
-            >
-              <Field label="Serial Number" required>
-                <div className="flex gap-2">
-                  <div className="min-w-0 flex-1">
+            <FormSection number={1} title="หน่วยงานและโครงการ">
+              {org.mode === 'search' && (
+                <Field label="ชื่อหน่วยงาน" required hint="พิมพ์บางส่วนของชื่อแล้วเลือกจากรายการ ระบบจะแสดงโครงการและสินค้าที่ส่งมอบให้หน่วยงานนั้น">
+                  <OrgSearch
+                    onSelect={(picked) => void pickOrg(picked)}
+                    onManual={(name) => resetOrg({ mode: 'manual', name })}
+                  />
+                </Field>
+              )}
+
+              {org.mode === 'manual' && (
+                <div>
+                  <Field label="ชื่อหน่วยงาน" required>
                     <InputWithIcon
-                      icon={QrCode}
-                      value={form.sn}
-                      onChange={(e) => setForm({ ...form, sn: e.target.value.toUpperCase() })}
-                      onBlur={checkSn}
-                      placeholder={`เช่น ${SITE.examples.serial}`}
-                      className="font-mono"
-                      maxLength={50}
+                      icon={Building2}
+                      value={org.name}
+                      onChange={(e) => setOrg({ mode: 'manual', name: e.target.value })}
+                      placeholder="เช่น โรงเรียนบ้านหนองบัว หรือ บริษัท เอบีซี จำกัด"
+                      maxLength={255}
                       required
                     />
-                  </div>
-                  <Button type="button" variant="secondary" onClick={checkSn} disabled={checking}>
-                    {checking ? 'กำลังตรวจ…' : 'ตรวจสอบ'}
-                  </Button>
+                  </Field>
+                  {searchable && (
+                    <button
+                      type="button"
+                      onClick={() => resetOrg({ mode: 'search' })}
+                      className="mt-2 text-sm font-medium text-brand-600 transition hover:text-brand-700"
+                    >
+                      ค้นหาจากรายชื่อหน่วยงานแทน
+                    </button>
+                  )}
                 </div>
-              </Field>
-
-              {snInfo && !snInfo.claimed && (
-                <Alert tone="warning">
-                  Serial Number นี้ยังไม่ถูกลงทะเบียน กรุณา{' '}
-                  <a href="/register" className="font-medium underline">
-                    ลงทะเบียนสินค้า
-                  </a>{' '}
-                  ผูกเบอร์โทรของท่านก่อนแจ้งปัญหา
-                </Alert>
               )}
-              {snInfo?.claimed && <Alert tone="success">{snInfo.product_name} · ลงทะเบียนแล้ว</Alert>}
 
-              <Field label="หมายเลขโทรศัพท์ที่ใช้ลงทะเบียน" required>
-                <InputWithIcon
-                  icon={Phone}
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
-                  inputMode="numeric"
-                  maxLength={10}
-                  placeholder="0812345678"
-                  required
-                />
-              </Field>
+              {org.mode === 'picked' && (
+                <>
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+                      <div className="min-w-0">
+                        <p className="font-medium wrap-anywhere text-navy-900">{org.org.name}</p>
+                        {(org.org.affiliation || org.org.province) && (
+                          <p className="text-sm text-navy-500">
+                            {[org.org.affiliation, org.org.province].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => resetOrg({ mode: 'search' })}
+                      className="shrink-0 text-sm font-medium text-brand-600 transition hover:text-brand-700"
+                    >
+                      เปลี่ยน
+                    </button>
+                  </div>
+
+                  {org.projects === null ? (
+                    <p className="flex items-center gap-2 text-sm text-navy-400">
+                      <Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลดโครงการ…
+                    </p>
+                  ) : org.error ? (
+                    <Alert tone="warning">{org.error}</Alert>
+                  ) : (
+                    <fieldset>
+                      <legend className="mb-1.5 text-sm font-medium text-navy-700">โครงการ</legend>
+                      <p className="mb-2.5 text-xs leading-relaxed text-navy-400">
+                        เลือกโครงการที่ซื้อสินค้าที่มีปัญหา — รายการสินค้าในข้อ 2 จะแสดงตามโครงการที่เลือก
+                      </p>
+                      <div role="radiogroup" aria-label="โครงการ" className="space-y-2">
+                        {org.projects.map((p) => (
+                          <ProjectChoice
+                            key={p.id}
+                            selected={projectId === p.id}
+                            onSelect={() => chooseProject(p.id)}
+                            title={p.name}
+                            detail={[
+                              p.code,
+                              p.contract_no && `สัญญา ${p.contract_no}`,
+                              thaiYear(p.date) && `ปี ${thaiYear(p.date)}`,
+                              `สินค้า ${p.items.length} รายการ`,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                            warranty={p.warranty}
+                          />
+                        ))}
+                        <ProjectChoice
+                          selected={projectId === null}
+                          onSelect={() => chooseProject(null)}
+                          title="ไม่แน่ใจว่าโครงการไหน"
+                          detail="เลือกสินค้าจากทุกโครงการของหน่วยงานนี้ หรือพิมพ์ชื่อสินค้าเอง"
+                        />
+                      </div>
+                    </fieldset>
+                  )}
+                </>
+              )}
             </FormSection>
 
-            <FormSection number={2} title="รายละเอียดปัญหา" divided>
-              <Field
-                label="อาการหรือปัญหาที่พบ"
-                required
-                hint="กรุณาอธิบายอาการที่พบอย่างละเอียด อย่างน้อย 10 ตัวอักษร"
+            <FormSection
+              number={2}
+              title="สินค้าที่มีปัญหา"
+              hint="แจ้งหลายรายการพร้อมกันได้ แต่ละรายการบอกอาการและแนบรูป/วิดีโอของตัวเอง · Serial Number ไม่บังคับ"
+              divided
+            >
+              {items.map((item, index) => (
+                <div key={item.key} className="space-y-4 rounded-2xl border border-navy-100 bg-navy-50/30 p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-navy-800">รายการที่ {index + 1}</p>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.key)}
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-navy-400 transition hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        ลบรายการนี้
+                      </button>
+                    )}
+                  </div>
+
+                  <Field
+                    label="สินค้า"
+                    required
+                    hint={
+                      fromProjects
+                        ? 'เลือกจากรายการสินค้าในโครงการ หรือพิมพ์ชื่อเองถ้าไม่มีในรายการ'
+                        : 'พิมพ์ชื่อสินค้า หรือเลือกจากรายการที่ขึ้นมาถ้ามีสินค้าที่ตรงกัน'
+                    }
+                  >
+                    <ProductInput
+                      value={item.product_name}
+                      onChange={(value) => updateItem(item.key, { product_name: value, project_item_id: null })}
+                      suggestions={suggestionsFor(item)}
+                      onSelect={(option) => selectProduct(item.key, option)}
+                      placeholder={`เช่น ${SITE.examples.productName}`}
+                      maxLength={255}
+                      required
+                    />
+                  </Field>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="ยี่ห้อ / รุ่น">
+                      <Input
+                        value={item.model}
+                        onChange={(e) => updateItem(item.key, { model: e.target.value })}
+                        placeholder={`เช่น ${SITE.examples.brand} ${SITE.examples.model}`}
+                        maxLength={255}
+                      />
+                    </Field>
+                    <Field label="Serial Number" hint="ไม่บังคับ — ถ้ามีช่วยให้ตรวจสอบได้เร็วขึ้น">
+                      <InputWithIcon
+                        icon={QrCode}
+                        value={item.sn}
+                        onChange={(e) => updateItem(item.key, { sn: e.target.value.toUpperCase() })}
+                        onBlur={() => void lookupSerial(item.key, item.sn.trim())}
+                        placeholder={`เช่น ${SITE.examples.serial}`}
+                        className="tabular font-mono"
+                        maxLength={50}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="อาการที่พบ" required>
+                    <Textarea
+                      value={item.description}
+                      onChange={(e) => updateItem(item.key, { description: e.target.value })}
+                      rows={3}
+                      placeholder={SITE.examples.problem}
+                      maxLength={2000}
+                      required
+                    />
+                  </Field>
+
+                  <ItemAttachments
+                    files={{ images: item.images, video: item.video }}
+                    otherBytes={totalBytes - itemBytes(item)}
+                    onChange={(files) => {
+                      updateItem(item.key, files)
+                      setFileError('')
+                    }}
+                  />
+                </div>
+              ))}
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={addItem}
+                disabled={items.length >= MAX_REPORT_ITEMS}
+                className="w-full border-dashed"
               >
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  rows={5}
-                  placeholder={SITE.examples.problem}
-                  required
-                />
-              </Field>
+                <Plus className="h-4 w-4" />
+                {items.length >= MAX_REPORT_ITEMS
+                  ? `แจ้งได้ครั้งละไม่เกิน ${MAX_REPORT_ITEMS} รายการ`
+                  : 'เพิ่มสินค้าอีกรายการ'}
+              </Button>
+
+              {fileError && <Alert tone="error">{fileError}</Alert>}
+              {totalBytes > 0 && <AttachmentUsage bytes={totalBytes} />}
             </FormSection>
 
             <FormSection
               number={3}
-              title="ไฟล์แนบ"
-              hint="ไม่บังคับ แต่ช่วยให้ทีมงานเห็นอาการจริงและแก้ไขได้ตรงจุด"
+              title="ข้อมูลผู้แจ้ง"
+              hint="ใช้เบอร์โทรนี้คู่กับเลขที่เคสเพื่อติดตามสถานะในภายหลัง"
               divided
             >
-              <Field label="แนบรูปถ่าย" hint={UPLOAD_LIMITS.image.label}>
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept={IMAGE_ACCEPT}
-                  multiple
-                  onChange={(e) => {
-                    addImages(e.target.files)
-                    e.target.value = ''
-                  }}
-                  className="hidden"
+              <Field label="ชื่อผู้แจ้ง" required>
+                <InputWithIcon
+                  icon={User}
+                  value={reporter.reporter_name}
+                  onChange={(e) => setReporter({ ...reporter, reporter_name: e.target.value })}
+                  placeholder="เช่น สมชาย ใจดี"
+                  maxLength={255}
+                  required
                 />
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  onDrop={handleDrop('image')}
-                  onDragOver={(e) => e.preventDefault()}
-                  disabled={images.length >= UPLOAD_LIMITS.image.maxCount}
-                  className={DROPZONE}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand-600 shadow-soft">
-                    <ImagePlus className="h-5 w-5" />
-                  </span>
-                  คลิกหรือลากรูปมาวางตรงนี้
-                  <span className="text-xs text-navy-300">
-                    เลือกแล้ว {images.length}/{UPLOAD_LIMITS.image.maxCount} รูป
-                  </span>
-                </button>
-
-                {imagePreviews.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {imagePreviews.map((url, index) => (
-                      <div key={url} className="group relative h-20 w-20">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={url}
-                          alt={`ตัวอย่างรูปที่ ${index + 1}`}
-                          className="h-full w-full rounded-xl border border-navy-100 object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          aria-label="ลบรูปนี้"
-                          className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white shadow-soft transition hover:bg-rose-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </Field>
 
-              <Field label="แนบวิดีโอ" hint={UPLOAD_LIMITS.video.label}>
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept={VIDEO_ACCEPT}
-                  onChange={(e) => {
-                    setSingleVideo(e.target.files)
-                    e.target.value = ''
-                  }}
-                  className="hidden"
-                />
-                {!video ? (
-                  <button
-                    type="button"
-                    onClick={() => videoInputRef.current?.click()}
-                    onDrop={handleDrop('video')}
-                    onDragOver={(e) => e.preventDefault()}
-                    className={DROPZONE}
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand-600 shadow-soft">
-                      <VideoIcon className="h-5 w-5" />
-                    </span>
-                    คลิกหรือลากวิดีโอมาวางตรงนี้
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-3 rounded-xl border border-navy-100 bg-navy-50/40 p-3">
-                    <video src={videoPreview} className="h-14 w-20 rounded-lg object-cover" muted />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-navy-700">{video.name}</p>
-                      <p className="text-xs text-navy-400">{(video.size / 1024 / 1024).toFixed(1)} MB</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVideo(null)
-                        setFileError('')
-                      }}
-                      aria-label="ลบวิดีโอนี้"
-                      className="shrink-0 rounded-lg p-1.5 text-navy-400 transition hover:bg-rose-50 hover:text-rose-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </Field>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="เบอร์โทรศัพท์ที่ติดต่อได้" required hint="ตัวเลข 10 หลัก ขึ้นต้นด้วย 0">
+                  <InputWithIcon
+                    icon={Phone}
+                    value={reporter.phone}
+                    onChange={(e) => setReporter({ ...reporter, phone: e.target.value.replace(/\D/g, '') })}
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="0812345678"
+                    required
+                  />
+                </Field>
 
-              {fileError && <Alert tone="error">{fileError}</Alert>}
-
-              {(images.length > 0 || video) && <AttachmentUsage bytes={sizeOf(images) + (video?.size ?? 0)} />}
+                <Field label="อีเมล" required>
+                  <InputWithIcon
+                    icon={Mail}
+                    type="email"
+                    value={reporter.email}
+                    onChange={(e) => setReporter({ ...reporter, email: e.target.value })}
+                    placeholder="name@example.com"
+                    maxLength={255}
+                    required
+                  />
+                </Field>
+              </div>
             </FormSection>
 
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full"
-              disabled={submitting || (snInfo !== null && !snInfo.claimed)}
+            <FormSection
+              number={4}
+              title="รายละเอียดเพิ่มเติม"
+              hint="ไม่บังคับ"
+              divided
             >
+              <Field label="รายละเอียดเพิ่มเติม" hint="เช่น สถานที่ติดตั้ง ช่วงเวลาที่สะดวกให้เข้าตรวจ หรือข้อมูลอื่นที่อยากแจ้ง">
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  maxLength={5000}
+                />
+              </Field>
+            </FormSection>
+
+            <FormSection number={5} title="ความเป็นส่วนตัว" divided>
+              <div>
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-navy-100 bg-navy-50/40 p-3.5 text-xs leading-relaxed whitespace-pre-line text-navy-500">
+                  {PRIVACY_TEXT}
+                </div>
+                <label className="mt-3 flex items-start gap-2.5 text-sm text-navy-700">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    required
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-navy-300 text-brand-600 focus:ring-brand-300"
+                  />
+                  <span>
+                    ข้าพเจ้ารับทราบและยินยอมตามประกาศความเป็นส่วนตัวข้างต้น
+                    <span className="ml-0.5 text-rose-500">*</span>
+                  </span>
+                </label>
+              </div>
+            </FormSection>
+
+            <Button type="submit" size="lg" className="w-full" disabled={submitting || !consent}>
               <Send className="h-5 w-5" />
-              {submitting ? 'กำลังส่ง…' : 'ส่งคำขอรับบริการ'}
+              {submitting ? 'กำลังส่ง…' : 'ส่งเรื่องแจ้งปัญหา'}
             </Button>
           </form>
         </Card>
 
         <aside className="space-y-4">
-          <TipCard icon={ClipboardCheck} title="ยังไม่ได้ลงทะเบียน?">
-            ต้องลงทะเบียนสินค้าก่อนจึงจะแจ้งปัญหาได้ ใช้เวลาเพียงไม่กี่นาที
-            <Link
-              href="/register"
-              className="mt-3 flex w-fit items-center gap-1 font-semibold text-brand-600 transition hover:text-brand-700"
-            >
-              ลงทะเบียนสินค้า
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <TipCard icon={Building2} title="หาหน่วยงานไม่เจอ?">
+            <TipList
+              items={[
+                'พิมพ์แค่บางคำของชื่อ เช่น ชื่อโรงเรียนหรือชื่อตำบล แทนการพิมพ์ชื่อเต็ม',
+                'ระบบค้นจากหน่วยงานที่เคยมีโครงการกับเรา ถ้าไม่พบ กด “ใช้ชื่อตามที่พิมพ์” ได้เลย',
+              ]}
+            />
+          </TipCard>
+          <TipCard icon={FolderOpen} title="แจ้งหลายสินค้าพร้อมกัน">
+            กด “เพิ่มสินค้าอีกรายการ” แล้วบอกอาการของแต่ละรายการ ทั้งหมดจะอยู่ในเลขที่เคสเดียวกัน
+          </TipCard>
+          <TipCard icon={QrCode} title="Serial Number อยู่ตรงไหน?">
+            <TipList items={SITE.snLocations} />
+            <p className="mt-3 text-xs text-navy-400">ไม่บังคับกรอก — สินค้าบางชนิดไม่มี Serial Number</p>
           </TipCard>
           <TipCard icon={Lightbulb} title="แจ้งอย่างไรให้แก้ไขได้เร็ว">
             <TipList items={SITE.reportTips} />
@@ -534,8 +770,57 @@ function ReportForm() {
           <TipCard icon={Paperclip} title="ไฟล์ที่แนบได้">
             <TipList items={[UPLOAD_LIMITS.image.label, UPLOAD_LIMITS.video.label, UPLOAD_LIMITS.totalLabel]} />
           </TipCard>
+          <TipCard icon={LockKeyhole} title="ข้อมูลของท่านปลอดภัย">
+            เบอร์โทรถูกปิดบังทุกครั้งที่แสดงบนหน้าเว็บ และใช้เพื่อการให้บริการหลังการขายเท่านั้น
+          </TipCard>
         </aside>
       </PageBody>
     </>
+  )
+}
+
+/** ตัวเลือกโครงการแบบการ์ด (ทำหน้าที่เหมือน radio) */
+function ProjectChoice({
+  selected,
+  onSelect,
+  title,
+  detail,
+  warranty,
+}: {
+  selected: boolean
+  onSelect: () => void
+  title: string
+  detail: string
+  warranty?: LookupProject['warranty']
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
+        selected
+          ? 'border-brand-400 bg-brand-50/70 ring-2 ring-brand-100'
+          : 'border-navy-100 bg-white hover:border-brand-200 hover:bg-brand-50/30'
+      }`}
+    >
+      <span
+        className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+          selected ? 'border-brand-600' : 'border-navy-300'
+        }`}
+      >
+        {selected && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium wrap-anywhere text-navy-900">{title}</span>
+        <span className="mt-0.5 block text-xs wrap-anywhere text-navy-400">{detail}</span>
+        {warranty && (
+          <span className="mt-1 block">
+            <WarrantyNote start={warranty.start} end={warranty.end} />
+          </span>
+        )}
+      </span>
+    </button>
   )
 }

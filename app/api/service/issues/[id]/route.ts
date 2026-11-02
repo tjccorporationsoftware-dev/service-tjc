@@ -1,30 +1,25 @@
 import { query, queryOne, execute } from '@/lib/db'
-import { LEGACY_WARRANTY_FIELDS, requireServiceKey } from '@/lib/service-api'
+import { loadIssueItems } from '@/lib/issues'
+import {
+  SERVICE_ISSUE_COLUMNS,
+  requireServiceKey,
+  toServiceIssue,
+  type ServiceIssueRow,
+} from '@/lib/service-api'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getSettings } from '@/lib/settings'
 import { serviceIssuePatchSchema, firstIssueMessage } from '@/lib/validations'
 
 /**
- * GET   /api/service/issues/[id] — ข้อมูลเต็มของเคสเดียว พร้อมรายการไฟล์แนบ
+ * GET   /api/service/issues/[id] — ข้อมูลเต็มของเคสเดียว พร้อมรายการไฟล์แนบ (+ company_name เหมือนหน้ารายการ)
  * PATCH /api/service/issues/[id] — เปลี่ยนสถานะเคส (ระบบแจ้งซ่อมเรียกเมื่อรับเรื่อง/ปิดงาน)
  */
 
-type DetailRow = {
-  id: number
-  description: string
-  status: string
-  admin_note: string | null
-  created_at: string
-  customer_name: string | null
-  phone: string | null
-  email: string | null
-  sn: string
-  product_name: string | null
-  brand: string | null
-  model: string | null
-}
+type DetailRow = ServiceIssueRow & { admin_note: string | null }
 
 type AttachmentRow = {
   id: number
+  issue_item_id: number | null
   file_type: 'image' | 'video'
   file_path: string
   original_name: string | null
@@ -33,14 +28,8 @@ type AttachmentRow = {
 
 async function loadIssue(id: number) {
   return queryOne<DetailRow>(
-    `SELECT ir.id, ir.description, ir.status, ir.admin_note, ir.created_at,
-            r.customer_name, r.phone, r.email,
-            s.sn,
-            p.name AS product_name, p.brand, p.model
+    `SELECT ${SERVICE_ISSUE_COLUMNS}, ir.admin_note
      FROM issue_reports ir
-     JOIN registrations r  ON ir.registration_id = r.id
-     JOIN serial_numbers s ON r.serial_number_id = s.id
-     LEFT JOIN products p  ON s.product_id = p.id
      WHERE ir.id = ?`,
     [id]
   )
@@ -69,14 +58,24 @@ export async function GET(request: Request, ctx: RouteContext<'/api/service/issu
   }
 
   const attachments = await query<AttachmentRow>(
-    `SELECT id, file_type, file_path, original_name, file_size
+    `SELECT id, issue_item_id, file_type, file_path, original_name, file_size
      FROM issue_attachments WHERE issue_report_id = ? ORDER BY id`,
     [id]
   )
 
   // ส่ง id ของไฟล์ไปด้วย ให้ผู้เรียกดาวน์โหลดผ่าน /api/service/issues/<id>/files/<file_id>
   // ซึ่งตรวจ key เหมือนกัน — ไม่ต้องพึ่ง /api/files/* ที่เปิดให้ใครก็โหลดได้
-  return Response.json({ issue: { ...issue, ...LEGACY_WARRANTY_FIELDS }, attachments })
+  const [items, { company_name }] = await Promise.all([loadIssueItems([id]), getSettings()])
+  const issueItems = items.get(id) ?? []
+
+  return Response.json({
+    issue: { ...toServiceIssue(issue, issueItems, company_name), admin_note: issue.admin_note },
+    // item_index = ลำดับใน issue.items ที่ไฟล์นี้เป็นของ (ใบงานเก็บไฟล์แยกตามรายการ) · null = ไฟล์ระดับเคส
+    attachments: attachments.map(({ issue_item_id, ...file }) => {
+      const index = issueItems.findIndex((item) => item.id === issue_item_id)
+      return { ...file, item_index: index === -1 ? null : index }
+    }),
+  })
 }
 
 export async function PATCH(request: Request, ctx: RouteContext<'/api/service/issues/[id]'>) {

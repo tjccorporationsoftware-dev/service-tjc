@@ -1,6 +1,13 @@
 import { query } from '@/lib/db'
-import { LEGACY_WARRANTY_FIELDS, requireServiceKey } from '@/lib/service-api'
+import { loadIssueItems } from '@/lib/issues'
+import {
+  SERVICE_ISSUE_COLUMNS,
+  requireServiceKey,
+  toServiceIssue,
+  type ServiceIssueRow,
+} from '@/lib/service-api'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getSettings } from '@/lib/settings'
 
 /**
  * GET /api/service/issues — รายการเคสที่ลูกค้าแจ้งและยังไม่ปิด
@@ -9,22 +16,9 @@ import { checkRateLimit } from '@/lib/rate-limit'
  * คืนชุดข้อมูลเดียวกับที่ฝั่งนั้นเคยอ่านจากฐานโดยตรง เพื่อให้สลับไปมาได้โดยหน้าจอไม่เปลี่ยน
  *
  * เอาเฉพาะ pending / in_progress — ที่ resolved/closed ถือว่าจบที่ฝั่งนี้แล้ว
+ * ทุกเคสมี company_name = ชื่อบริษัทที่แอดมินตั้งในหน้า "ตั้งค่า" (null ถ้ายังไม่ได้ตั้ง)
+ * รูปแบบแต่ละเคสดู toServiceIssue() ใน lib/service-api.ts
  */
-
-type IssueRow = {
-  id: number
-  description: string
-  status: string
-  created_at: string
-  customer_name: string | null
-  phone: string | null
-  email: string | null
-  sn: string
-  product_name: string | null
-  brand: string | null
-  model: string | null
-  file_count: number
-}
 
 const MAX_LIMIT = 200
 
@@ -40,20 +34,24 @@ export async function GET(request: Request) {
   // ต่อลง SQL ตรง ๆ ไม่ได้ถ้าไม่ clamp ก่อน (mysql2 ไม่รับ placeholder ใน LIMIT)
   const limit = Number.isFinite(raw) && raw > 0 ? Math.min(Math.floor(raw), MAX_LIMIT) : 50
 
-  const rows = await query<IssueRow>(
-    `SELECT ir.id, ir.description, ir.status, ir.created_at,
-            r.customer_name, r.phone, r.email,
-            s.sn,
-            p.name AS product_name, p.brand, p.model,
+  const rows = await query<ServiceIssueRow & { file_count: number }>(
+    `SELECT ${SERVICE_ISSUE_COLUMNS},
             (SELECT COUNT(*) FROM issue_attachments ia WHERE ia.issue_report_id = ir.id) AS file_count
      FROM issue_reports ir
-     JOIN registrations r  ON ir.registration_id = r.id
-     JOIN serial_numbers s ON r.serial_number_id = s.id
-     LEFT JOIN products p  ON s.product_id = p.id
      WHERE ir.status IN ('pending', 'in_progress')
      ORDER BY ir.created_at DESC
      LIMIT ${limit}`
   )
 
-  return Response.json({ issues: rows.map((row) => ({ ...row, ...LEGACY_WARRANTY_FIELDS })) })
+  const [items, { company_name }] = await Promise.all([
+    loadIssueItems(rows.map((row) => row.id)),
+    getSettings(),
+  ])
+
+  return Response.json({
+    issues: rows.map((row) => ({
+      ...toServiceIssue(row, items.get(row.id) ?? [], company_name),
+      file_count: Number(row.file_count),
+    })),
+  })
 }

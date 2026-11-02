@@ -4,15 +4,14 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
-  CalendarDays,
-  CheckCircle2,
-  Inbox,
+  Building2,
+  FolderOpen,
+  Hash,
   ListChecks,
   MessageSquareText,
   Package,
   Phone,
   Plus,
-  QrCode,
   Search,
 } from 'lucide-react'
 import {
@@ -25,15 +24,22 @@ import {
   InputWithIcon,
   PageBody,
   PageHero,
-  formatDate,
   formatDateTime,
 } from '@/components/ui'
 import { ErrorDialog } from '@/components/error-dialog'
+import { WarrantyNote } from '@/components/warranty-note'
 import { readPrefill } from '@/lib/customer-link'
 import { ISSUE_STATUS_LABEL } from '@/lib/display'
-import { SITE } from '@/lib/site-content'
 
 type Attachment = { type: string; url: string }
+
+type IssueItem = {
+  product_name: string
+  model: string | null
+  sn: string | null
+  description: string | null
+  attachments: Attachment[]
+}
 
 type Issue = {
   id: number
@@ -43,23 +49,19 @@ type Issue = {
   admin_note: string | null
   created_at: string
   updated_at: string
+  org_name: string | null
+  project_name: string | null
+  warranty: { start: string; end: string } | null
+  items: IssueItem[]
   attachments: Attachment[]
 }
 
-type Result = {
-  registration: {
-    sn: string
-    product_name: string
-    phone: string
-    registered_at: string
-  }
-  issues: Issue[]
-}
+type Result = { phone: string; issues: Issue[] }
 
 /** สิ่งที่จะเห็นหลังค้นหา — โชว์ก่อนค้นหาให้รู้ว่าหน้านี้ใช้ทำอะไร */
 const PREVIEW = [
-  { icon: Package, title: 'ข้อมูลสินค้า', text: 'สินค้าและ Serial Number ที่ลงทะเบียนไว้' },
-  { icon: ListChecks, title: 'ประวัติคำขอรับบริการ', text: 'ทุกเคสที่เคยแจ้ง พร้อมรูปและวิดีโอที่แนบ' },
+  { icon: Package, title: 'สินค้าที่แจ้ง', text: 'หน่วยงาน โครงการ และสินค้าทุกรายการในเคส' },
+  { icon: ListChecks, title: 'ประวัติคำขอรับบริการ', text: 'ทุกเคสที่แจ้งด้วยเบอร์นี้ พร้อมรูปและวิดีโอที่แนบ' },
   { icon: MessageSquareText, title: 'ความคืบหน้า', text: 'สถานะล่าสุดและหมายเหตุจากเจ้าหน้าที่' },
 ]
 
@@ -74,8 +76,12 @@ export default function StatusPage() {
 
 function StatusForm() {
   const searchParams = useSearchParams()
-  // ลิงก์ที่เจ้าหน้าที่ส่งมา (หน้าสร้าง QR) อาจกรอก SN ไว้ให้แล้ว เหลือเบอร์โทรที่ลูกค้าต้องกรอกเอง (ไม่ใส่เบอร์ลงลิงก์ — PDPA)
-  const [form, setForm] = useState(() => ({ sn: readPrefill(searchParams).sn, phone: '' }))
+  // หน้าแจ้งปัญหาส่งเลขที่เคสมาทาง ?case= · ลิงก์จากหน้าสร้าง QR ส่ง SN มาทาง ?sn=
+  // เบอร์โทรลูกค้าต้องกรอกเองเสมอ (ไม่ใส่เบอร์ลงลิงก์ — PDPA)
+  const [form, setForm] = useState(() => ({
+    q: (searchParams.get('case') ?? '').trim().toUpperCase().slice(0, 50) || readPrefill(searchParams).sn,
+    phone: '',
+  }))
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
   // ข้อความในหน้าต่างแจ้งเตือนกลางจอ (ErrorDialog) — ว่าง = ปิด
@@ -94,7 +100,7 @@ function StatusForm() {
     setResult(null)
     setLoading(true)
     try {
-      const params = new URLSearchParams({ sn: form.sn, phone: form.phone })
+      const params = new URLSearchParams({ q: form.q, phone: form.phone })
       const res = await fetch(`/api/issues/status?${params}`)
       const data = await res.json()
       if (!res.ok) {
@@ -116,23 +122,24 @@ function StatusForm() {
       <PageHero
         icon={Search}
         title="ตรวจสอบสถานะ"
-        description="ค้นหาด้วย Serial Number และหมายเลขโทรศัพท์ที่ใช้ลงทะเบียน เพื่อดูข้อมูลสินค้าและความคืบหน้าของคำขอรับบริการ"
+        description="ค้นหาด้วยเลขที่เคสหรือ Serial Number คู่กับหมายเลขโทรศัพท์ที่ใช้แจ้งปัญหา เพื่อดูความคืบหน้าของคำขอรับบริการ"
       />
 
       <PageBody className="max-w-4xl space-y-6">
         <Card className="p-6 shadow-soft-lg sm:p-8">
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <Field label="Serial Number" required>
+            <Field label="เลขที่เคส หรือ Serial Number" required>
               <InputWithIcon
-                icon={QrCode}
-                value={form.sn}
-                onChange={(e) => setForm({ ...form, sn: e.target.value.toUpperCase() })}
-                placeholder={`เช่น ${SITE.examples.serial}`}
+                icon={Hash}
+                value={form.q}
+                onChange={(e) => setForm({ ...form, q: e.target.value.toUpperCase() })}
+                placeholder="เช่น CASE-000123"
                 className="font-mono"
+                maxLength={50}
                 required
               />
             </Field>
-            <Field label="หมายเลขโทรศัพท์" required>
+            <Field label="หมายเลขโทรศัพท์ที่ใช้แจ้ง" required>
               <InputWithIcon
                 icon={Phone}
                 value={form.phone}
@@ -170,119 +177,133 @@ function StatusForm() {
         )}
 
         {result && (
-          <>
-            <Card className="p-6 sm:p-8">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
-                    <Package className="h-6 w-6" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs text-navy-400">สินค้าที่ลงทะเบียน</p>
-                    <h2 className="text-lg font-semibold wrap-anywhere text-navy-900">{result.registration.product_name}</h2>
-                  </div>
-                </div>
-                <Badge tone="green">
-                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                  ลงทะเบียนแล้ว
-                </Badge>
-              </div>
-              <dl className="mt-6 grid gap-4 border-t border-navy-100 pt-5 sm:grid-cols-3">
-                <Detail icon={QrCode} label="Serial Number" value={result.registration.sn} mono />
-                <Detail icon={Phone} label="เบอร์โทร" value={result.registration.phone} mono />
-                <Detail
-                  icon={CalendarDays}
-                  label="วันที่ลงทะเบียน"
-                  value={formatDate(result.registration.registered_at)}
-                />
-              </dl>
-            </Card>
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-navy-900">
+                ประวัติคำขอรับบริการ
+                <span className="rounded-full bg-navy-100 px-2.5 py-0.5 text-sm font-semibold text-navy-600">
+                  {result.issues.length}
+                </span>
+              </h2>
+              <Link
+                href="/report"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 transition hover:text-brand-700"
+              >
+                <Plus className="h-4 w-4" />
+                แจ้งปัญหาใหม่
+              </Link>
+            </div>
+            <p className="text-sm text-navy-500">
+              เคสที่แจ้งด้วยเบอร์ <span className="tabular font-mono">{result.phone}</span>
+            </p>
 
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-navy-900">
-                  ประวัติคำขอรับบริการ
-                  <span className="rounded-full bg-navy-100 px-2.5 py-0.5 text-sm font-semibold text-navy-600">
-                    {result.issues.length}
-                  </span>
-                </h2>
-                <Link
-                  href="/report"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 transition hover:text-brand-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  แจ้งปัญหาใหม่
-                </Link>
-              </div>
-
-              {result.issues.length === 0 ? (
-                <Card className="flex flex-col items-center py-12 text-center">
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-50 text-navy-300">
-                    <Inbox className="h-7 w-7" strokeWidth={1.5} />
-                  </span>
-                  <p className="mt-4 font-medium text-navy-700">ยังไม่มีรายการแจ้งปัญหาสำหรับสินค้านี้</p>
-                  <p className="mt-1 text-sm text-navy-400">หากพบอาการผิดปกติ แจ้งปัญหาพร้อมแนบรูปได้เลย</p>
-                </Card>
-              ) : (
-                result.issues.map((issue) => (
-                  <Card key={issue.id} className="p-6 sm:p-7">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="tabular font-mono text-lg font-bold text-navy-900">{issue.case_number}</span>
-                      <Badge tone={ISSUE_STATUS_TONE[issue.status]}>{ISSUE_STATUS_LABEL[issue.status]}</Badge>
-                    </div>
-
-                    <IssueProgress status={issue.status} />
-
-                    <p className="mt-5 text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere text-navy-700">
-                      {issue.description}
-                    </p>
-
-                    {issue.attachments.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {issue.attachments.map((file) =>
-                          file.type === 'image' ? (
-                            <a key={file.url} href={file.url} target="_blank" rel="noreferrer">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={file.url}
-                                alt="ไฟล์แนบ"
-                                className="h-20 w-20 rounded-xl border border-navy-100 object-cover shadow-soft transition hover:opacity-80"
-                              />
-                            </a>
-                          ) : (
-                            <video
-                              key={file.url}
-                              src={file.url}
-                              controls
-                              className="h-20 rounded-xl border border-navy-100 shadow-soft"
-                            />
-                          )
-                        )}
-                      </div>
-                    )}
-
-                    {issue.admin_note && (
-                      <div className="mt-5 flex gap-3 rounded-xl bg-brand-50/70 p-4 ring-1 ring-brand-100">
-                        <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-brand-700">หมายเหตุจากเจ้าหน้าที่</p>
-                          <p className="mt-1 text-sm whitespace-pre-wrap wrap-anywhere text-navy-700">{issue.admin_note}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="mt-5 border-t border-navy-100 pt-4 text-xs text-navy-400">
-                      ส่งคำขอเมื่อ {formatDateTime(issue.created_at)} · อัปเดตล่าสุด{' '}
-                      {formatDateTime(issue.updated_at)}
-                    </p>
-                  </Card>
-                ))
-              )}
-            </section>
-          </>
+            {result.issues.map((issue) => (
+              <IssueCard key={issue.id} issue={issue} />
+            ))}
+          </section>
         )}
       </PageBody>
     </>
+  )
+}
+
+function IssueCard({ issue }: { issue: Issue }) {
+  // เคสยุคก่อนไม่มีอาการรายสินค้า — อาการอยู่ที่ description ของเคส
+  const perItem = issue.items.some((item) => item.description)
+
+  return (
+    <Card className="p-6 sm:p-7">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="tabular font-mono text-lg font-bold text-navy-900">{issue.case_number}</span>
+        <Badge tone={ISSUE_STATUS_TONE[issue.status]}>{ISSUE_STATUS_LABEL[issue.status]}</Badge>
+      </div>
+
+      <IssueProgress status={issue.status} />
+
+      {(issue.org_name || issue.project_name) && (
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+          {issue.org_name && <Detail icon={Building2} label="หน่วยงาน" value={issue.org_name} />}
+          {issue.project_name && <Detail icon={FolderOpen} label="โครงการ" value={issue.project_name} />}
+        </dl>
+      )}
+      {issue.warranty && (
+        <div className="mt-3">
+          <WarrantyNote start={issue.warranty.start} end={issue.warranty.end} />
+        </div>
+      )}
+
+      <ul className="mt-5 space-y-2.5">
+        {issue.items.map((item, index) => (
+          <li key={index} className="rounded-xl border border-navy-100 bg-navy-50/40 px-4 py-3 text-sm">
+            <div className="flex items-start gap-2.5">
+              <Package className="mt-0.5 h-4 w-4 shrink-0 text-navy-300" />
+              <div className="min-w-0">
+                <p className="font-medium wrap-anywhere text-navy-900">
+                  {item.product_name}
+                  {item.model && <span className="font-normal text-navy-500"> · {item.model}</span>}
+                </p>
+                {item.sn && <p className="tabular font-mono text-xs wrap-anywhere text-navy-500">SN {item.sn}</p>}
+                {item.description && (
+                  <p className="mt-1.5 leading-relaxed whitespace-pre-wrap wrap-anywhere text-navy-700">
+                    {item.description}
+                  </p>
+                )}
+                <AttachmentThumbs files={item.attachments} />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {issue.description && (
+        <div className="mt-4">
+          {perItem && <p className="text-xs font-semibold text-navy-500">รายละเอียดเพิ่มเติม</p>}
+          <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere text-navy-700">
+            {issue.description}
+          </p>
+        </div>
+      )}
+
+      {/* ไฟล์ระดับเคส — เคสหลายรายการที่แจ้งก่อนแยกไฟล์ตามรายการ */}
+      <AttachmentThumbs files={issue.attachments} />
+
+      {issue.admin_note && (
+        <div className="mt-5 flex gap-3 rounded-xl bg-brand-50/70 p-4 ring-1 ring-brand-100">
+          <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-brand-700">หมายเหตุจากเจ้าหน้าที่</p>
+            <p className="mt-1 text-sm whitespace-pre-wrap wrap-anywhere text-navy-700">{issue.admin_note}</p>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-5 border-t border-navy-100 pt-4 text-xs text-navy-400">
+        ส่งคำขอเมื่อ {formatDateTime(issue.created_at)} · อัปเดตล่าสุด {formatDateTime(issue.updated_at)}
+      </p>
+    </Card>
+  )
+}
+
+/** รูป/วิดีโอที่แนบ — ใช้ทั้งใต้แต่ละรายการสินค้าและไฟล์ระดับเคส */
+function AttachmentThumbs({ files }: { files: Attachment[] }) {
+  if (files.length === 0) return null
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {files.map((file) =>
+        file.type === 'image' ? (
+          <a key={file.url} href={file.url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={file.url}
+              alt="ไฟล์แนบ"
+              className="h-20 w-20 rounded-xl border border-navy-100 object-cover shadow-soft transition hover:opacity-80"
+            />
+          </a>
+        ) : (
+          <video key={file.url} src={file.url} controls className="h-20 rounded-xl border border-navy-100 shadow-soft" />
+        )
+      )}
+    </div>
   )
 }
 
@@ -317,19 +338,17 @@ function Detail({
   icon: Icon,
   label,
   value,
-  mono,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
-  mono?: boolean
 }) {
   return (
     <div className="flex items-start gap-2.5">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-navy-300" />
       <div className="min-w-0">
         <dt className="text-xs text-navy-400">{label}</dt>
-        <dd className={`mt-0.5 wrap-anywhere text-navy-900 ${mono ? 'tabular font-mono' : ''}`}>{value}</dd>
+        <dd className="mt-0.5 wrap-anywhere text-navy-900">{value}</dd>
       </div>
     </div>
   )

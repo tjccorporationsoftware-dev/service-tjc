@@ -2,13 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { FileSignature, Search, Wrench } from 'lucide-react'
+import { Search, Wrench } from 'lucide-react'
 import type { SiteDesign } from '@/lib/design'
 import { SITE } from '@/lib/site-content'
 
-/** short = ป้ายบนมือถือ (ปุ่ม 3 ช่องเท่ากัน ชื่อเต็มยาวเกินช่อง) */
+/** short = ป้ายบนมือถือ (ปุ่มช่องเท่ากัน ชื่อเต็มยาวเกินช่อง) · ไม่มีหน้าลงทะเบียนแยกแล้ว — แจ้งปัญหาหน้าเดียวจบ */
 const NAV = [
-  { href: '/register', label: 'ลงทะเบียนผลิตภัณฑ์', short: 'ลงทะเบียน', icon: FileSignature },
   { href: '/report', label: 'แจ้งปัญหา', short: 'แจ้งปัญหา', icon: Wrench },
   { href: '/status', label: 'เช็คสถานะ', short: 'เช็คสถานะ', icon: Search },
 ]
@@ -42,13 +41,13 @@ const LOOK = {
   },
 } satisfies Record<SiteDesign, Record<'wrap' | 'item' | 'active' | 'idle' | 'activeIcon', string>>
 
-/** เมนูบนแถบหัว — มือถือแบ่ง 3 ช่องเต็มความกว้าง จอกว้างเรียงต่อกัน */
+/** เมนูบนแถบหัว — มือถือแบ่งช่องเท่ากันเต็มความกว้าง จอกว้างเรียงต่อกัน */
 export function CustomerNav() {
   const pathname = usePathname()
   const look = LOOK[SITE.design]
 
   return (
-    <nav aria-label="เมนูหลัก" className={`grid w-full grid-cols-3 gap-1 sm:flex sm:w-auto ${look.wrap}`}>
+    <nav aria-label="เมนูหลัก" className={`grid w-full grid-cols-2 gap-1 sm:flex sm:w-auto ${look.wrap}`}>
       {NAV.map((item) => {
         const active = pathname === item.href
         const Icon = item.icon

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Check, CheckCircle2, FileSignature, ImagePlus, Leaf, Search, Wrench } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2, ImagePlus, Leaf, Search, Wrench } from 'lucide-react'
 import { EcoSun, EcoWaves } from '@/components/decor'
 import { SITE } from '@/lib/site-content'
 import { TIMELINE, TRUST, delay } from './shared'
@@ -70,18 +70,18 @@ export function EcoHero() {
             className="mt-10 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start motion-safe:animate-rise"
             style={delay(560)}
           >
-            <Link href="/register" className={CTA_PRIMARY}>
+            <Link href="/report" className={CTA_PRIMARY}>
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-1/3 -skew-x-12 bg-linear-to-r from-transparent via-white/35 to-transparent motion-safe:animate-shine"
               />
-              <FileSignature className="h-5 w-5" />
-              ลงทะเบียนสินค้า
+              <Wrench className="h-5 w-5" />
+              แจ้งปัญหา
               <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
             </Link>
-            <Link href="/report" className={CTA_SECONDARY}>
-              <Wrench className="h-5 w-5 transition duration-300 group-hover:-rotate-12" />
-              แจ้งปัญหา
+            <Link href="/status" className={CTA_SECONDARY}>
+              <Search className="h-5 w-5" />
+              เช็คสถานะ
             </Link>
           </div>
 
@@ -113,15 +113,15 @@ export function EcoClosing() {
 
         <h2 className="text-2xl font-bold text-white sm:text-5xl sm:leading-tight">พร้อมเริ่มต้นแล้วหรือยัง?</h2>
         <p className="mx-auto mt-5 max-w-xl leading-relaxed text-brand-50 sm:text-lg">
-          ลงทะเบียนสินค้าของคุณวันนี้ เพื่อรับบริการหลังการขายได้รวดเร็วยิ่งขึ้นเมื่อต้องการ
+          สินค้ามีปัญหา? แจ้งพร้อมแนบรูปหรือวิดีโอได้ทันที ทีมงานรับเรื่องและอัปเดตสถานะให้ติดตามได้ตลอด
         </p>
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
-            href="/register"
+            href="/report"
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-base font-semibold text-brand-700 shadow-soft-lg transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            <FileSignature className="h-5 w-5" />
-            ลงทะเบียนสินค้า
+            <Wrench className="h-5 w-5" />
+            แจ้งปัญหา
             <ArrowRight className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
           </Link>
           <Link
@@ -227,7 +227,7 @@ function EcoShowcase() {
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-5 w-5" />
           </span>
-          <span className="text-sm font-semibold text-navy-900">ลงทะเบียนสำเร็จ</span>
+          <span className="text-sm font-semibold text-navy-900">ส่งเรื่องสำเร็จ</span>
         </div>
       </div>
 

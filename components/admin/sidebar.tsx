@@ -1,37 +1,65 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  BookOpen,
-  ClipboardList,
   LayoutDashboard,
-  ListOrdered,
   LogOut,
   Menu,
   MessageSquareWarning,
-  Package,
-  QrCode,
   ScanLine,
+  Settings,
   ShieldCheck,
   X,
 } from 'lucide-react'
 
-const LINKS = [
-  { href: '/admin/dashboard', label: 'ภาพรวม', icon: LayoutDashboard },
-  { href: '/admin/registrations', label: 'การลงทะเบียน', icon: ClipboardList },
-  { href: '/admin/products', label: 'ผลิตภัณฑ์', icon: Package },
-  { href: '/admin/sn-setup', label: 'ตั้งค่ารหัส SN', icon: ListOrdered },
-  // label สั้นจนเดาไม่ออกว่าหน้านี้ทำอะไรได้บ้าง จึงมีบรรทัดอธิบายเพิ่ม (เมนูอื่นชื่อบอกอยู่แล้ว)
-  { href: '/admin/serial-numbers', label: 'SN', hint: 'สร้าง · ผูกสินค้า', icon: QrCode },
-  { href: '/admin/issues', label: 'คำขอรับบริการ', icon: MessageSquareWarning },
-  { href: '/admin/qrcode', label: 'สร้าง QR', icon: ScanLine },
-  { href: '/admin/manual', label: 'คู่มือ', icon: BookOpen },
+type NavLink = {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  /** แสดงตัวเลขเคสรอดำเนินการท้ายเมนู */
+  pendingBadge?: boolean
+}
+
+/**
+ * หลังบ้านมีแค่งานเคสแจ้งปัญหา (หน่วยงาน/โครงการ/หลายสินค้า) — หน้า SN / ผลิตภัณฑ์ / การลงทะเบียน / คู่มือระบบเดิม
+ * ถูกตัดออกตอนเริ่มระบบใหม่ (พ.ย. 2026) ตารางใน DB ยังอยู่ (ดู CLAUDE.md)
+ */
+const NAV: { title?: string; links: NavLink[] }[] = [
+  {
+    links: [
+      { href: '/admin/dashboard', label: 'ภาพรวม', icon: LayoutDashboard },
+      { href: '/admin/issues', label: 'เคสแจ้งปัญหา', icon: MessageSquareWarning, pendingBadge: true },
+    ],
+  },
+  {
+    title: 'ลูกค้า',
+    links: [{ href: '/admin/qrcode', label: 'ลิงก์ & QR ส่งลูกค้า', icon: ScanLine }],
+  },
+  {
+    title: 'ระบบ',
+    links: [{ href: '/admin/settings', label: 'ตั้งค่า', icon: Settings }],
+  },
 ]
 
-// หน้าที่ตารางมีหลายคอลัมน์ ให้ใช้เต็มความกว้างจอ แทนเพดาน max-w-6xl ของหน้าอื่น
-const FULL_WIDTH_PAGES = ['/admin/serial-numbers']
+/** จำนวนเคสรอดำเนินการ — โหลดใหม่ทุกครั้งที่เปลี่ยนหน้า (หลังอัปเดตสถานะในหน้าเคสก็จะเห็นตัวเลขใหม่เมื่อย้ายหน้า) */
+function usePendingCount(pathname: string) {
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/issues/counts')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setCount(data.pending)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
+  return count
+}
 
 type Session = { username: string; displayName: string | null; role: 'admin' | 'staff' }
 
@@ -42,6 +70,7 @@ function initialOf(session: Session) {
 export function AdminShell({ session, children }: { session: Session; children: React.ReactNode }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const pending = usePendingCount(pathname)
 
   return (
     <div className="min-h-screen bg-app-canvas">
@@ -91,43 +120,50 @@ export function AdminShell({ session, children }: { session: Session; children: 
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-1">
-          {LINKS.map((link) => {
-            const active = pathname === link.href
-            const Icon = link.icon
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  active ? 'bg-brand-50 text-brand-700' : 'text-navy-500 hover:bg-navy-50 hover:text-navy-800'
-                }`}
-              >
-                {active && (
-                  <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-full bg-brand-500" />
-                )}
-                <Icon
-                  className={`h-[18px] w-[18px] shrink-0 ${
-                    active ? 'text-brand-600' : 'text-navy-400 group-hover:text-brand-600'
-                  }`}
-                  strokeWidth={2}
-                />
-                {link.hint ? (
-                  <span className="min-w-0">
-                    <span className="block">{link.label}</span>
-                    <span
-                      className={`block text-xs font-normal ${active ? 'text-brand-600' : 'text-navy-400'}`}
-                    >
-                      {link.hint}
-                    </span>
-                  </span>
-                ) : (
-                  link.label
-                )}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 pt-1 pb-3">
+          {NAV.map((group, index) => (
+            <div key={group.title ?? index} className="space-y-1">
+              {group.title && (
+                <p className="px-3 pb-0.5 text-[11px] font-semibold tracking-wide text-navy-300 uppercase">
+                  {group.title}
+                </p>
+              )}
+              {group.links.map((link) => {
+                const active = pathname === link.href
+                const Icon = link.icon
+                const badge = link.pendingBadge && pending ? pending : null
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                      active ? 'bg-brand-50 text-brand-700' : 'text-navy-500 hover:bg-navy-50 hover:text-navy-800'
+                    }`}
+                  >
+                    {active && (
+                      <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-full bg-brand-500" />
+                    )}
+                    <Icon
+                      className={`h-[18px] w-[18px] shrink-0 ${
+                        active ? 'text-brand-600' : 'text-navy-400 group-hover:text-brand-600'
+                      }`}
+                      strokeWidth={2}
+                    />
+                    <span className="min-w-0 flex-1">{link.label}</span>
+                    {badge !== null && (
+                      <span
+                        className="tabular rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                        title={`รอดำเนินการ ${badge.toLocaleString('th-TH')} เคส`}
+                      >
+                        {badge.toLocaleString('th-TH')}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-navy-100 p-4">
@@ -148,7 +184,7 @@ export function AdminShell({ session, children }: { session: Session; children: 
 
       <div className="flex min-h-screen flex-col pt-14 md:pt-0 md:pl-64">
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-          <div className={`mx-auto ${FULL_WIDTH_PAGES.includes(pathname) ? '' : 'max-w-6xl'}`}>
+          <div className="mx-auto max-w-6xl">
             {children}
           </div>
         </main>

@@ -30,6 +30,8 @@ export async function GET(_request: Request, ctx: RouteContext<'/api/files/[...p
 
   const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream
 
+  // ไฟล์แนบเป็นของลูกค้า (PDPA): ไม่ให้เว็บอื่นฝัง/ดึง ไม่ส่ง URL ต่อเป็น referrer ไม่ให้ search engine เก็บ
+  // และ sandbox กันเนื้อหาถูกตีความเป็นหน้าเว็บแม้ content-type จะพลาด
   return new Response(stream, {
     headers: {
       'Content-Type': contentType,
@@ -37,6 +39,10 @@ export async function GET(_request: Request, ctx: RouteContext<'/api/files/[...p
       'Content-Disposition': 'inline',
       'Cache-Control': 'private, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'Referrer-Policy': 'no-referrer',
+      'X-Robots-Tag': 'noindex, nofollow',
     },
   })
 }
