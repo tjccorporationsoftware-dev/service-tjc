@@ -27,6 +27,7 @@ type Row = {
   contract_no: string | null
   project_warranty_start: string | null
   project_warranty_end: string | null
+  project_year: number | null
 }
 
 const STATUSES = ['pending', 'in_progress', 'resolved', 'closed'] as const
@@ -47,12 +48,19 @@ export async function GET(request: Request) {
     const like = `%${search}%`
     // "CASE-000012" / "case12" / "12" → ตรงกับเคส #12 ด้วย (นอกจากค้นในข้อความ)
     const caseId = /^(?:case-?)?0*(\d{1,9})$/i.exec(search)?.[1]
+    // "2567" / "ปี 2567" → เคสที่ลูกค้าเลือกปีโครงการนั้นด้วย
+    const year = /^(?:ปี\s*)?(25\d{2})$/.exec(search)?.[1]
     where.push(`(i.reporter_phone LIKE ? OR i.reporter_name LIKE ? OR i.org_name LIKE ? OR i.project_name LIKE ?
-                 OR i.description LIKE ?${caseId ? ' OR i.id = ?' : ''}
+                 OR i.description LIKE ?${caseId ? ' OR i.id = ?' : ''}${year ? ' OR i.project_year = ?' : ''}
                  OR EXISTS (SELECT 1 FROM issue_items ii
                             WHERE ii.issue_report_id = i.id
                               AND (ii.sn LIKE ? OR ii.product_name LIKE ? OR ii.description LIKE ?)))`)
-    values.push(like, like, like, like, like, ...(caseId ? [Number(caseId)] : []), like, like, like)
+    values.push(
+      like, like, like, like, like,
+      ...(caseId ? [Number(caseId)] : []),
+      ...(year ? [Number(year)] : []),
+      like, like, like
+    )
   }
 
   const warranty = params.get('warranty')
@@ -86,7 +94,7 @@ export async function GET(request: Request) {
     `SELECT i.id, i.description, i.status, i.admin_note, i.created_at, i.updated_at,
             i.reporter_name, i.reporter_phone, i.reporter_email,
             i.org_name, i.org_province, i.project_name, i.project_code, i.contract_no,
-            i.project_warranty_start, i.project_warranty_end
+            i.project_warranty_start, i.project_warranty_end, i.project_year
      FROM issue_reports i
      ${clause}
      ORDER BY i.created_at DESC

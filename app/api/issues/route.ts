@@ -5,7 +5,7 @@ import { withTransaction } from '@/lib/db'
 import { reportSchema, firstIssueMessage, UPLOAD_LIMITS, type ReportInput } from '@/lib/validations'
 import { saveUpload, UploadError, UPLOAD_ROOT, type SavedUpload } from '@/lib/uploads'
 import { getCustomerProjects } from '@/lib/tjc-api'
-import { caseNumber } from '@/lib/display'
+import { caseNumber, thaiYearOf } from '@/lib/display'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 /**
@@ -112,8 +112,8 @@ export async function POST(request: Request) {
            (reporter_name, reporter_phone, reporter_email,
             org_customer_id, org_name, org_province,
             project_ref_id, project_name, project_code, contract_no,
-            project_warranty_start, project_warranty_end, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            project_warranty_start, project_warranty_end, project_year, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           report.reporter_name,
           report.phone,
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
           report.contract_no,
           report.warranty?.start ?? null,
           report.warranty?.end ?? null,
+          report.project_year,
           report.description,
         ]
       )
@@ -156,6 +157,7 @@ export async function POST(request: Request) {
           case_number: caseNumber(issueId),
           org_name: report.org_name,
           project_name: report.project_name,
+          project_year: report.project_year,
           warranty: report.warranty,
           items: report.items.map((item) => ({ product_name: item.product_name, model: item.model, sn: item.sn })),
           attachments: saved.length,
@@ -170,11 +172,16 @@ export async function POST(request: Request) {
   }
 }
 
-type ResolvedReport = Omit<ReportInput, 'org_province' | 'project_name' | 'project_code' | 'contract_no' | 'items' | 'description'> & {
+type ResolvedReport = Omit<
+  ReportInput,
+  'org_province' | 'project_name' | 'project_code' | 'contract_no' | 'project_year' | 'items' | 'description'
+> & {
   org_province: string | null
   project_name: string | null
   project_code: string | null
   contract_no: string | null
+  /** ปีของโครงการ (พ.ศ.) · 0 = ลูกค้าเลือก "ไม่แน่ใจ" · null = หน้าเว็บรุ่นก่อนที่ไม่มีช่องนี้ */
+  project_year: number | null
   /** วันรับประกันของโครงการ — มาจากระบบงานเท่านั้น (ไม่รับค่าที่หน้าเว็บส่งมา) */
   warranty: { start: string; end: string } | null
   description: string
@@ -207,6 +214,8 @@ async function resolveReferences(input: ReportInput): Promise<ResolvedReport | {
     project_name: null,
     project_code: null,
     contract_no: null,
+    // ไม่ส่งมา (หน้าเว็บรุ่นก่อน) = NULL · ส่ง null มา = ลูกค้าเลือก "ไม่แน่ใจ" เก็บเป็น 0 ให้แยกออกจากกันได้
+    project_year: input.project_year === undefined ? null : (input.project_year ?? 0),
     warranty: null,
     description: input.description?.trim() ?? '',
     items: input.items.map((item) => ({
@@ -255,6 +264,8 @@ async function resolveReferences(input: ReportInput): Promise<ResolvedReport | {
     project_name: project?.name ?? null,
     project_code: project?.code ?? null,
     contract_no: project?.contract_no ?? null,
+    // เลือกโครงการจากระบบงาน = ปีของโครงการนั้น (ไม่เชื่อปีที่หน้าเว็บส่งมา) · ไม่ได้เลือกโครงการ = ปีที่ลูกค้าเลือก
+    project_year: thaiYearOf(project?.date) ?? typed.project_year,
     warranty: project?.warranty ? { start: project.warranty.start, end: project.warranty.end } : null,
     items: typed.items.map((item, index) => {
       const known = projectItems.get(input.items[index].project_item_id ?? 0)

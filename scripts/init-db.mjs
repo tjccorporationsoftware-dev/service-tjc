@@ -104,6 +104,8 @@ const MIGRATIONS = [
        ON one.issue_report_id = ia.issue_report_id
    SET ia.issue_item_id = one.item_id
    WHERE ia.issue_item_id IS NULL`,
+  // ปีของโครงการที่ลูกค้าเลือกตอนแจ้ง (พ.ศ.) — 0 = ไม่แน่ใจ · NULL = เคสก่อนมีช่องนี้ (ระบบงานมีแต่โครงการปี 2569 ปีเก่าต้องอาศัยค่านี้)
+  'ALTER TABLE issue_reports ADD COLUMN IF NOT EXISTS project_year SMALLINT NULL AFTER project_warranty_end',
 ]
 
 async function main() {

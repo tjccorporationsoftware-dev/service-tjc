@@ -32,7 +32,7 @@ export const LEGACY_WARRANTY_FIELDS = {
 export const SERVICE_ISSUE_COLUMNS = `ir.id, ir.description, ir.status, ir.created_at,
   ir.reporter_name, ir.reporter_phone, ir.reporter_email,
   ir.org_name, ir.org_province, ir.project_ref_id, ir.project_name, ir.project_code, ir.contract_no,
-  ir.project_warranty_start, ir.project_warranty_end`
+  ir.project_warranty_start, ir.project_warranty_end, ir.project_year`
 
 export type ServiceIssueRow = {
   id: number
@@ -50,6 +50,7 @@ export type ServiceIssueRow = {
   contract_no: string | null
   project_warranty_start: string | null
   project_warranty_end: string | null
+  project_year: number | null
 }
 
 /**
@@ -74,6 +75,7 @@ function warrantyFields(row: ServiceIssueRow) {
  *
  * - description = อาการทั้งหมดรวมเป็นข้อความเดียว (combinedDescription) · note = รายละเอียดเพิ่มเติมที่ลูกค้าเขียนเอง
  * - customer_name / phone / email = ผู้แจ้ง · org_* = หน่วยงาน · project_* / contract_no = โครงการที่ลูกค้าเลือก (project_id = projects.id)
+ * - project_year = ปีของโครงการ (พ.ศ.) · 0 = ลูกค้าเลือก "ไม่แน่ใจ" · null = เคสก่อนมีช่องนี้
  * - sn = SN แรกที่มี (null ถ้าไม่มีเลย) · product_name / model = สินค้าเดียว หรือสรุป "… และอีก n รายการ"
  * - items = สินค้าทุกรายการพร้อม SN และอาการของแต่ละรายการ
  */
@@ -101,6 +103,8 @@ export function toServiceIssue(row: ServiceIssueRow, items: IssueItem[], company
     project_name: row.project_name,
     project_code: row.project_code,
     contract_no: row.contract_no,
+    // ปีของโครงการ (พ.ศ.) ที่ลูกค้าเลือก — 0 = ลูกค้าไม่แน่ใจ · null = เคสที่แจ้งก่อนมีช่องนี้
+    project_year: row.project_year,
     items: items.map((item, index) => ({
       product_name: item.product_name,
       model: item.model,

@@ -15,6 +15,7 @@ type IssueRow = {
   project_name: string | null
   project_warranty_start: string | null
   project_warranty_end: string | null
+  project_year: number | null
 }
 
 /** "CASE-000123" / "case123" / "123" → 123 — ไม่ใช่รูปแบบเลขที่เคสคืน null */
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
 
   const issues = await query<IssueRow>(
     `SELECT ir.id, ir.description, ir.status, ir.admin_note, ir.created_at, ir.updated_at,
-            ir.org_name, ir.project_name, ir.project_warranty_start, ir.project_warranty_end
+            ir.org_name, ir.project_name, ir.project_warranty_start, ir.project_warranty_end, ir.project_year
      FROM issue_reports ir
      WHERE ir.reporter_phone = ?
        AND (ir.id = ? OR EXISTS (SELECT 1 FROM issue_items ii WHERE ii.issue_report_id = ir.id AND ii.sn = ?))
@@ -77,6 +78,7 @@ export async function GET(request: Request) {
       updated_at: issue.updated_at,
       org_name: issue.org_name,
       project_name: issue.project_name,
+      project_year: issue.project_year,
       warranty:
         issue.project_warranty_start && issue.project_warranty_end
           ? { start: issue.project_warranty_start, end: issue.project_warranty_end }

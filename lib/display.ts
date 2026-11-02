@@ -6,6 +6,29 @@ export function maskPhone(phone: string): string {
   return `${phone.slice(0, 2)}x-xxx-${phone.slice(6)}`
 }
 
+/** ปีของโครงการเก่าสุดที่ให้ลูกค้าเลือกได้ (พ.ศ.) — เก่ากว่านี้เลือก "ไม่แน่ใจ" */
+export const PROJECT_YEAR_MIN = 2566
+
+/** ปีปัจจุบันเป็น พ.ศ. (เวลาเครื่อง local) */
+export function currentThaiYear(now = new Date()): number {
+  return now.getFullYear() + 543
+}
+
+/** 'YYYY-MM-DD' → ปี พ.ศ. · ค่าว่าง/ผิดรูปแบบ → null */
+export function thaiYearOf(iso: string | null | undefined): number | null {
+  const year = Number(iso?.slice(0, 4))
+  return Number.isInteger(year) && year > 1900 ? year + 543 : null
+}
+
+/**
+ * ป้ายปีของโครงการที่ลูกค้าเลือกตอนแจ้ง (issue_reports.project_year)
+ * 0 = ลูกค้าเลือก "ไม่แน่ใจ" · null = เคสที่แจ้งก่อนมีช่องนี้ (ไม่แสดงป้าย)
+ */
+export function projectYearLabel(year: number | null | undefined): string | null {
+  if (year === null || year === undefined) return null
+  return year === 0 ? 'ไม่แน่ใจปี' : `ปี ${year}`
+}
+
 /** เลขที่เคสสำหรับแสดงผล — 12 → CASE-000012 */
 export function caseNumber(id: number): string {
   return `CASE-${String(id).padStart(6, '0')}`

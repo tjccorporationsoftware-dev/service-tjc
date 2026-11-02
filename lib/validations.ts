@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PROJECT_YEAR_MIN, currentThaiYear } from './display'
 
 /** เบอร์ไทย 10 หลัก ขึ้นต้นด้วย 0 */
 export const phoneSchema = z
@@ -52,6 +53,16 @@ export const reportSchema = z.object({
   project_name: optionalText(255, 'ชื่อโครงการยาวเกินไป'),
   project_code: optionalText(50, 'รหัสโครงการยาวเกินไป'),
   contract_no: optionalText(100, 'เลขที่สัญญายาวเกินไป'),
+  /**
+   * ปีของโครงการ (พ.ศ.) ที่ลูกค้าเลือก — ให้เจ้าหน้าที่หาโครงการปีเก่าที่ยังไม่อยู่ในระบบงานได้เร็วขึ้น
+   * null = ลูกค้าเลือก "ไม่แน่ใจ" · ไม่ส่งมา = หน้าเว็บรุ่นก่อน · เลือกโครงการจากระบบงานแล้ว server ใช้ปีของโครงการนั้นแทน
+   */
+  project_year: z
+    .number()
+    .int()
+    .refine((year) => year >= PROJECT_YEAR_MIN && year <= currentThaiYear() + 1, 'ปีของโครงการไม่ถูกต้อง')
+    .nullable()
+    .optional(),
   items: z
     .array(reportItemSchema)
     .min(1, 'กรุณาเพิ่มสินค้าที่มีปัญหาอย่างน้อย 1 รายการ')

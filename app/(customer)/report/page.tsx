@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import type { ZodError } from 'zod'
 import {
   Building2,
+  CalendarDays,
   CheckCircle2,
   FolderOpen,
   House,
@@ -43,6 +44,7 @@ import { OrgSearch, type OrgOption } from '@/components/org-search'
 import { ProductInput, type ProductOption } from '@/components/product-input'
 import { WarrantyNote } from '@/components/warranty-note'
 import { readPrefill } from '@/lib/customer-link'
+import { PROJECT_YEAR_MIN, currentThaiYear, thaiYearOf } from '@/lib/display'
 import { SITE } from '@/lib/site-content'
 import type { LookupProject } from '@/lib/tjc-api'
 import { reportSchema, MAX_REPORT_ITEMS, UPLOAD_LIMITS } from '@/lib/validations'
@@ -88,10 +90,15 @@ const blankItem = (key: number, init: Partial<ItemForm> = {}): ItemForm => ({
 
 const EMPTY_REPORTER = { reporter_name: '', phone: '', email: '' }
 
+/** ปีของโครงการที่ลูกค้าเลือก — '' = ยังไม่ได้เลือก · 'unknown' = ไม่แน่ใจ */
+type YearChoice = number | 'unknown' | ''
+
 type Success = {
   case_number: string
   org_name: string
   project_name: string | null
+  /** ปีของโครงการที่บันทึก (พ.ศ.) · 0 = ไม่แน่ใจ */
+  project_year: number | null
   warranty: { start: string; end: string } | null
   items: { product_name: string; model: string | null; sn: string | null }[]
   attachments: number
@@ -104,9 +111,6 @@ const PRIVACY_TEXT = `ประกาศความเป็นส่วนต�
 กรุณาเก็บเลขที่เคสและเบอร์โทรที่ใช้แจ้งไว้ สำหรับติดตามสถานะงานบริการ`
 
 const norm = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
-
-/** "2026-07-08" → "2569" */
-const thaiYear = (date: string | null) => (date ? String(Number(date.slice(0, 4)) + 543) : null)
 
 /** ข้อความ error แรก — ถ้าเป็นช่องในรายการสินค้า บอกด้วยว่ารายการที่เท่าไร */
 function describeIssue(error: ZodError): string {
@@ -139,6 +143,8 @@ function ReportForm() {
   // false = ยังไม่ได้เชื่อมระบบงาน ค้นหาหน่วยงานไม่ได้ — ซ่อนทางกลับไปหน้าค้นหา
   const [searchable, setSearchable] = useState(true)
   const [projectId, setProjectId] = useState<number | null>(null)
+  // ปีของโครงการ — ใช้เมื่อไม่ได้เลือกโครงการจากระบบงาน (ระบบงานมีแต่โครงการปีล่าสุด ปีเก่าลูกค้าต้องบอกเอง)
+  const [yearChoice, setYearChoice] = useState<YearChoice>('')
   // ลิงก์ที่เจ้าหน้าที่ส่งมา (หน้าสร้าง QR) อาจกรอก SN / สินค้าไว้ให้แล้ว — ใส่ในรายการแรก (ดู lib/customer-link.ts)
   const [items, setItems] = useState<ItemForm[]>(() => {
     const prefill = readPrefill(searchParams)
@@ -189,6 +195,8 @@ function ReportForm() {
 
   const projects = org.mode === 'picked' ? (org.projects ?? []) : []
   const project = projects.find((p) => p.id === projectId) ?? null
+  // เลือกโครงการจากระบบงานแล้ว = รู้ปีจากข้อมูลโครงการ ไม่ต้องให้ลูกค้าเลือกซ้ำ (server ก็ใช้ปีของโครงการเหมือนกัน)
+  const projectYear = project ? thaiYearOf(project.date) : null
   // สินค้าแนะนำ: โครงการที่เลือก → ทุกโครงการของหน่วยงาน → ผลิตภัณฑ์ที่เปิดใช้งานของเว็บนี้
   const projectOptions = (project ? [project] : projects).flatMap((p) =>
     p.items.map((item) => ({ option: { id: item.id, name: item.name, brand: null, model: item.model }, projectId: p.id }))
@@ -244,6 +252,7 @@ function ReportForm() {
   async function pickOrg(picked: OrgOption) {
     setOrg({ mode: 'picked', org: picked, projects: null, error: '' })
     setProjectId(null)
+    setYearChoice('')
     try {
       const res = await fetch(`/api/lookup/projects?customer_id=${picked.id}`)
       const data = await res.json()
@@ -267,6 +276,7 @@ function ReportForm() {
   function resetOrg(next: Org) {
     setOrg(next)
     setProjectId(null)
+    setYearChoice('')
     // สินค้าที่เลือกจากหน่วยงานเดิมยังคงชื่อไว้ แต่ไม่อ้างอิงรายการของหน่วยงานเดิมแล้ว
     setItems((list) => list.map((item) => ({ ...item, project_item_id: null })))
   }
@@ -313,6 +323,10 @@ function ReportForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (projectYear === null && yearChoice === '') {
+      fail('กรุณาเลือกปีของโครงการ — ถ้าจำไม่ได้ เลือก “ไม่แน่ใจ”')
+      return
+    }
     const payload = {
       org_customer_id: org.mode === 'picked' ? org.org.id : null,
       org_name: org.mode === 'picked' ? org.org.name : org.mode === 'manual' ? org.name : '',
@@ -321,6 +335,8 @@ function ReportForm() {
       project_name: project?.name ?? '',
       project_code: project?.code ?? '',
       contract_no: project?.contract_no ?? '',
+      // null = ลูกค้าเลือก "ไม่แน่ใจ"
+      project_year: projectYear ?? (typeof yearChoice === 'number' ? yearChoice : null),
       items: items.map((item) => ({
         project_item_id: item.project_item_id,
         product_name: item.product_name,
@@ -395,6 +411,9 @@ function ReportForm() {
                 {success.project_name && (
                   <dd className="mt-0.5 text-sm wrap-anywhere text-navy-500">โครงการ: {success.project_name}</dd>
                 )}
+                {success.project_year ? (
+                  <dd className="mt-0.5 text-sm text-navy-500">ปีของโครงการ: พ.ศ. {success.project_year}</dd>
+                ) : null}
                 {success.warranty && (
                   <dd className="mt-1">
                     <WarrantyNote start={success.warranty.start} end={success.warranty.end} />
@@ -536,7 +555,7 @@ function ReportForm() {
                             detail={[
                               p.code,
                               p.contract_no && `สัญญา ${p.contract_no}`,
-                              thaiYear(p.date) && `ปี ${thaiYear(p.date)}`,
+                              thaiYearOf(p.date) && `ปี ${thaiYearOf(p.date)}`,
                               `สินค้า ${p.items.length} รายการ`,
                             ]
                               .filter(Boolean)
@@ -555,6 +574,8 @@ function ReportForm() {
                   )}
                 </>
               )}
+
+              <YearPicker fixedYear={projectYear} value={yearChoice} onChange={setYearChoice} />
             </FormSection>
 
             <FormSection
@@ -776,6 +797,70 @@ function ReportForm() {
         </aside>
       </PageBody>
     </>
+  )
+}
+
+/**
+ * ปีของโครงการ (พ.ศ.) — เจ้าหน้าที่ใช้หาโครงการปีเก่าที่ยังไม่อยู่ในระบบงาน (ขึ้นเป็นป้ายในกล่องเคสของระบบแจ้งซ่อม)
+ * เลือกโครงการจากระบบงานแล้วแสดงปีของโครงการนั้นแทน ไม่ต้องเลือกซ้ำ
+ */
+function YearPicker({
+  fixedYear,
+  value,
+  onChange,
+}: {
+  fixedYear: number | null
+  value: YearChoice
+  onChange: (value: YearChoice) => void
+}) {
+  if (fixedYear !== null) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl bg-navy-50/70 px-4 py-2.5 text-sm text-navy-600">
+        <CalendarDays className="h-4 w-4 shrink-0 text-brand-600" />
+        <span>
+          ปีของโครงการ <span className="tabular font-semibold text-navy-900">พ.ศ. {fixedYear}</span> — ตามโครงการที่เลือก
+        </span>
+      </p>
+    )
+  }
+
+  const thisYear = currentThaiYear()
+  const years: YearChoice[] = [
+    ...Array.from({ length: thisYear - PROJECT_YEAR_MIN + 1 }, (_, index) => thisYear - index),
+    'unknown',
+  ]
+
+  return (
+    <fieldset>
+      <legend className="mb-1.5 text-sm font-medium text-navy-700">
+        ปีที่ซื้อ / ปีของโครงการ (พ.ศ.)
+        <span className="ml-0.5 text-rose-500">*</span>
+      </legend>
+      <p className="mb-2.5 text-xs leading-relaxed text-navy-400">
+        ช่วยให้เจ้าหน้าที่ค้นข้อมูลโครงการได้เร็วขึ้น — ถ้าจำไม่ได้ เลือก “ไม่แน่ใจ”
+      </p>
+      <div role="radiogroup" aria-label="ปีของโครงการ" className="flex flex-wrap gap-2">
+        {years.map((year) => {
+          const selected = value === year
+          return (
+            <button
+              key={year}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(year)}
+              className={`tabular rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                selected
+                  ? 'border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-100'
+                  : 'border-navy-200 bg-white text-navy-600 hover:border-brand-200 hover:bg-brand-50/40'
+              }`}
+            >
+              {year === 'unknown' ? 'ไม่แน่ใจ' : year}
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }
 

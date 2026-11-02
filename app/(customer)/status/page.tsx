@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Building2,
+  CalendarDays,
   FolderOpen,
   Hash,
   ListChecks,
@@ -51,6 +52,8 @@ type Issue = {
   updated_at: string
   org_name: string | null
   project_name: string | null
+  /** ปีของโครงการ (พ.ศ.) · 0 = ไม่แน่ใจ · null = เคสก่อนมีช่องนี้ */
+  project_year: number | null
   warranty: { start: string; end: string } | null
   items: IssueItem[]
   attachments: Attachment[]
@@ -220,10 +223,13 @@ function IssueCard({ issue }: { issue: Issue }) {
 
       <IssueProgress status={issue.status} />
 
-      {(issue.org_name || issue.project_name) && (
+      {(issue.org_name || issue.project_name || issue.project_year) && (
         <dl className="mt-5 grid gap-3 sm:grid-cols-2">
           {issue.org_name && <Detail icon={Building2} label="หน่วยงาน" value={issue.org_name} />}
           {issue.project_name && <Detail icon={FolderOpen} label="โครงการ" value={issue.project_name} />}
+          {issue.project_year ? (
+            <Detail icon={CalendarDays} label="ปีของโครงการ" value={`พ.ศ. ${issue.project_year}`} />
+          ) : null}
         </dl>
       )}
       {issue.warranty && (

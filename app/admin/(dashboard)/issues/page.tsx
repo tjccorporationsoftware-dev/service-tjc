@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Building2, FolderOpen, Inbox, Package, Paperclip, PencilLine } from 'lucide-react'
+import { Building2, CalendarDays, FolderOpen, Inbox, Package, Paperclip, PencilLine } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -16,7 +16,7 @@ import {
   formatDateTime,
 } from '@/components/admin/ui'
 import { WarrantyNote } from '@/components/warranty-note'
-import { ISSUE_STATUS_LABEL } from '@/lib/display'
+import { ISSUE_STATUS_LABEL, projectYearLabel } from '@/lib/display'
 import { useApiList } from '@/lib/use-api-list'
 
 type Attachment = { type: string; url: string }
@@ -51,6 +51,8 @@ type Issue = {
   project_warranty_end: string | null
   /** อยู่ในประกัน ณ วันแจ้ง · null = ไม่มีข้อมูลประกันของโครงการ */
   in_warranty: boolean | null
+  /** ปีของโครงการ (พ.ศ.) · 0 = ลูกค้าไม่แน่ใจ · null = เคสก่อนมีช่องนี้ */
+  project_year: number | null
   items: IssueItem[]
   attachments: Attachment[]
 }
@@ -199,7 +201,7 @@ function IssuesView({ initial }: { initial: Filters }) {
           <Input
             value={filters.search}
             onChange={(e) => updateFilters({ search: e.target.value })}
-            placeholder="ค้นหา เลขเคส / หน่วยงาน / โครงการ / สินค้า / SN / ชื่อหรือเบอร์ผู้แจ้ง / อาการ…"
+            placeholder="ค้นหา เลขเคส / ปี (เช่น 2567) / หน่วยงาน / โครงการ / สินค้า / SN / ชื่อหรือเบอร์ผู้แจ้ง / อาการ…"
           />
           <Select value={filters.warranty} onChange={(e) => updateFilters({ warranty: e.target.value })}>
             {WARRANTY_FILTERS.map((option) => (
@@ -234,6 +236,12 @@ function IssuesView({ initial }: { initial: Filters }) {
                   <Badge tone={ISSUE_STATUS_TONE[issue.status]}>
                     {ISSUE_STATUS_LABEL[issue.status]}
                   </Badge>
+                  {projectYearLabel(issue.project_year) && (
+                    <Badge tone={issue.project_year ? 'brand' : 'slate'}>
+                      <CalendarDays className="mr-1 h-3.5 w-3.5" />
+                      {projectYearLabel(issue.project_year)}
+                    </Badge>
+                  )}
                   {issue.in_warranty !== null &&
                     (issue.in_warranty ? (
                       <Badge tone="green">อยู่ในประกัน ณ วันแจ้ง</Badge>

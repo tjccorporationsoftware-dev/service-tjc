@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS issue_reports (
   contract_no VARCHAR(100),
   project_warranty_start DATE,               -- วันรับประกันของโครงการจากระบบงาน ณ ตอนแจ้ง · NULL = ไม่มีข้อมูล / ไม่ได้เลือกโครงการ
   project_warranty_end DATE,                 -- (คนละเรื่องกับคอลัมน์ประกันยุคเก่าที่เลิกใช้ — ค่านี้มาจาก projects ของ tjc-api เท่านั้น)
+  project_year SMALLINT NULL,                -- ปีของโครงการ (พ.ศ.) · เลือกโครงการจากระบบงาน = ปีของโครงการนั้น · 0 = ลูกค้าเลือก "ไม่แน่ใจ" · NULL = เคสที่แจ้งก่อนมีช่องนี้
   description TEXT NOT NULL,                 -- เคสใหม่ = รายละเอียดเพิ่มเติม (ว่างได้ — อาการอยู่ที่ issue_items) · เคสเก่า = อาการ
   status ENUM('pending','in_progress','resolved','closed') NOT NULL DEFAULT 'pending',
   in_warranty TINYINT(1) NOT NULL DEFAULT 1, -- เลิกใช้ (ดูหัวไฟล์)
